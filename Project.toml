@@ -1,0 +1,13 @@
+name = "TelecomUtils"
+uuid = "0c499ce9-5070-43f6-85c8-6d9cb66e1eb8"
+authors = ["Alberto Mengali <disberd@gmail.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1.6.2"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
