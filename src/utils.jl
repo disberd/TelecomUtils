@@ -1,13 +1,20 @@
 """
+Generate a regular lattice of points
 $(TYPEDSIGNATURES)
-Generate a regular lattice with following parameters
-- `dx` : element spacing on the x axis
-- `dy` : element spacing on the y axis
-- `ds` : displacement along x between rows of elements
-- `f_cond`: function of x and y returning 1 if element at position x-y must be kept and 0 otherwise
+
+# Arguments
+- `dx` → element spacing on the x axis
+- `dy` → element spacing on the y axis
+- `ds` → displacement along x between rows of elements
+- `f_cond::Function` → function of two arguments (`f(x,y) = ...`) returning `true` if element at position `x,y` must be kept and `false` otherwise
+
+# Keyord Arguments
+- `dx0 = 0` → x coordinate of the origin of the lattice
+- `dy0 = 0` → y coordinate of the origin of the lattice
+- `M::Int = 70` → Number of elements to generate per row of points before appliying the filtering function `f_cond`
+- `N::Int = M` → Number of rows of points to generate before appliying the filtering function `f_cond`
 """
 function generate_regular_lattice(dx::T, dy::T, ds::T, f_cond::Function = (x, y)->true;dx0 = T(0), dy0 = T(0), M::Int = 70,N::Int = M) where T<:Real
-
 	# Function to generate x position as function of row,column number m,n
 	x(m, n) = m * dx + n * ds + dx0
 	# Function to generate y position as function of row,column number m,n
@@ -18,6 +25,28 @@ function generate_regular_lattice(dx::T, dy::T, ds::T, f_cond::Function = (x, y)
 	return out
 end
 generate_regular_lattice(dx::Real,dy::Real,ds::Real,args...;kwargs...) = generate_regular_lattice(promote(dx,dy,ds)...,args...;kwargs...)
+
+"""
+`generate_square_lattice(spacing::Real[,f_cond];kwargs...)`
+# Summary
+Generate a square lattice of points (with equal spacing among x and y directions)
+# Arguments
+- `spacing` → spacing between elements on both x and y axis
+
+See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the keyword arguments
+"""
+generate_square_lattice(spacing::Real,args...;kwargs...) = generate_regular_lattice(spacing,spacing,0,args...;kwargs...)
+
+"""
+`generate_hex_lattice(spacing::Real[,f_cond];kwargs...)`
+# Summary
+Generate a hexagonal lattice of points (with equal spacing between them)
+# Arguments
+- `spacing` → spacing between elements on both x and y axis
+
+See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the keyword arguments
+"""
+generate_hex_lattice(spacing::Real,args...;kwargs...) = generate_regular_lattice(spacing .* (1,√3/2,.5)...,args...;kwargs...)
 
 # Get the conversion from linear to db and viceversa
 """
