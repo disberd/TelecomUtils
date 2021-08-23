@@ -31,7 +31,7 @@ generate_regular_lattice(dx::Real,dy::Real,ds::Real,args...;kwargs...) = generat
 # Summary
 Generate a square lattice of points (with equal spacing among x and y directions)
 # Arguments
-- `spacing` → spacing between elements on both x and y axis
+- `spacing` → spacing between points on both x and y axis
 
 See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the keyword arguments
 """
@@ -42,7 +42,7 @@ generate_square_lattice(spacing::Real,args...;kwargs...) = generate_regular_latt
 # Summary
 Generate a hexagonal lattice of points (with equal spacing between them)
 # Arguments
-- `spacing` → spacing between elements on both x and y axis
+- `spacing` → spacing between points
 
 See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the keyword arguments
 """
