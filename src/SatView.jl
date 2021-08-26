@@ -6,31 +6,26 @@ using InteractiveUtils
 
 # ╔═╡ 590cdbce-fc45-11eb-2fde-1d27628251b7
 begin
-	using PlutoUtils
 	using Proj4
-	using DocStringExtensions
 	using CoordinateTransformations
 	using StaticArrays
 	using LinearAlgebra
 	using Unitful
 	using Unitful.DefaultSymbols
 	using Rotations
+	using Parameters
 end
-
-# ╔═╡ bcee47c1-81c1-4c77-af09-22c04374fa4f
-using Parameters
 
 # ╔═╡ 9e29c3ea-2cda-4726-86a3-20cabdb20245
 #=╠═╡ notebook_exclusive
 begin
 	using BenchmarkTools
 	using PlutoTest
+	using MacroTools
+	using PlutoUtils
+	using DocStringExtensions
+	using SatelliteToolbox
 end
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ d56dc0b2-204c-410e-ad75-f6abbdae1f7a
-#=╠═╡ notebook_exclusive
-using SatelliteToolbox
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 74422a23-0760-470f-9e1e-43b8c3972f65
@@ -176,6 +171,12 @@ function ecef_to_geodetic(r_e::AbstractVector; ellipsoid = wgs84_ellipsoid)
     return rad2deg(lat)*°, rad2deg(lon)*°, h*m
 end
 
+# ╔═╡ 85b0e8bd-4255-4b94-a2d8-70e487db60cb
+atan(3,4) |> sec
+
+# ╔═╡ 0e7e61fd-1de0-4a73-aebb-33af60ba7804
+norm((3,4))/4
+
 # ╔═╡ 75d0fc45-87e9-42bc-aab5-dae0cf099eaa
 # Overload call with length
 ecef_to_geodetic(r_e::AbstractVector{<:Unitful.Length};kwargs...) = ecef_to_geodetic(map(x -> uconvert(u"m",x) |> ustrip,r_e);kwargs...)
@@ -247,6 +248,14 @@ We just override that specific function to accept AbstractVectors
     dist[], azi1[], azi2[]
 end
 
+# ╔═╡ bb47e669-bf83-405e-bfe1-fb35c3c13d4c
+md"""
+## SatViewCoordinate type
+"""
+
+# ╔═╡ 0ad5adbf-4ffa-4a8b-bc3d-a2668d8495eb
+abstract type SatViewCoordinate end
+
 # ╔═╡ bf534d5c-b861-4c4c-b645-7848b3eaf0fe
 md"""
 ## LLA
@@ -259,7 +268,7 @@ Here we want to define a structure that contains useful informations and functio
 
 # ╔═╡ 41599efd-45b8-471c-a8ec-2fde36b4f58f
 begin
-	@with_kw_noshow struct LLA
+	@with_kw_noshow struct LLA <: SatViewCoordinate
 		lat::typeof(1.0u"°")
 		lon::typeof(1.0u"°")
 		alt::typeof(1.0u"km")
@@ -273,6 +282,15 @@ end
 # ╔═╡ e817a623-cb7e-4de9-a4e6-a00ec736fdca
 # Method with LLA input
 geodetic_to_ecef(lla::LLA;kwargs...) = geodetic_to_ecef(lla.lat,lla.lon,lla.alt;kwargs...)
+
+# ╔═╡ 11e7154b-9da0-46be-9486-a3a028520fb5
+function Base.isapprox(x::T,y::T;kwargs...) where T <: Union{<:SatViewCoordinate,Ellipsoid}
+	for s ∈ fieldnames(T)
+		f = Base.isapprox(getfield(x,s),getfield(y,s);kwargs...)
+		f || return false
+	end
+	return true
+end
 
 # ╔═╡ 23ae9323-9059-43cd-8efa-8a75a10ac236
 #=╠═╡ notebook_exclusive
@@ -297,7 +315,7 @@ The elevation is the angle of the pointing with respect to the local horizon of 
 
 # ╔═╡ 1ca4f2bb-a865-49de-9899-e1ae93ae29be
 begin
-	@with_kw_noshow struct ERA
+	@with_kw_noshow struct ERA <: SatViewCoordinate
 		el::typeof(1.0u"°")
 		r::typeof(1.0u"km")
 		az::typeof(1.0u"°")
@@ -351,7 +369,7 @@ where ``\mathbf{R}`` is a the rotation matrix:
 $(texeq("
 \\mathbf{R} = \\begin{bmatrix}
 	- {\\rm sin}(lat_u) & {\\rm cos}(lat_u)& 0 \\
-	- {\\rm sin}(lon_u){\\rm cos}(lat_u) & - {\\rm sin}(lon_u){\\rm cos}(lat_u) & {\\rm cos}(lon_u) \\
+	- {\\rm sin}(lon_u){\\rm cos}(lat_u) & - {\\rm sin}(lon_u){\\rm sin}(lat_u) & {\\rm cos}(lon_u) \\
 	{\\rm cos}(lon_u){\\rm cos}(lat_u) & {\\rm cos}(lon_u){\\rm sin}(lat_u) & {\\rm sin}(lon_u) 
 \\end{bmatrix}.
 "))
@@ -364,127 +382,148 @@ md"""
 ### Rotation Matrix
 """
 
-# ╔═╡ 3179c657-aa27-4465-8a90-51ec991701c8
-"""
-$SIGNATURES
+# ╔═╡ f5e22bff-efc9-4a3c-a70f-8e800d325ae8
+# Generic definition
+_rotation_matrix(s::Symbol,lat,lon) = _rotation_matrix(Val(s),lat,lon)
 
-Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
-"""
-function tropocentric_rotation_matrix(lat,lon)
-	# Precompute the sines and cosines
-	sλ, cλ = sincos(lat)
-	sφ, cφ = sincos(lon)
+# ╔═╡ 3179c657-aa27-4465-8a90-51ec991701c8
+begin
+	"""
+	$SIGNATURES
 	
-	# Generate the rotation matrix as a StaticArray
-	return SA_F64[
-		-sλ      cλ      0
-		-sφ*cλ  -sφ*sλ   cφ
-		 cφ*cλ   cφ*sλ   sφ
-		] |> RotMatrix
-end	
+	Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
+	"""
+	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
+		# Precompute the sines and cosines
+		sλ, cλ = sincos(lat)
+		sφ, cφ = sincos(lon)
+		
+		# Generate the rotation matrix as a StaticArray
+		return SA_F64[
+			-sλ      cλ      0
+			-sφ*cλ  -sφ*sλ   cφ
+			 cφ*cλ   cφ*sλ   sφ
+			] |> RotMatrix
+	end
+	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon) = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
+end
 
 # ╔═╡ 3d630992-f6f5-4af2-beea-171428580037
 #=╠═╡ notebook_exclusive
-@test tropocentric_rotation_matrix(0°,60°) == SA_F64[0 1 0;-√3/2 0 1/2;1/2 0 √3/2]
+@test _rotation_matrix(Val(:ENUfromECEF),0°,60°) == SA_F64[0 1 0;-√3/2 0 1/2;1/2 0 √3/2]
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 5c450408-fa09-4325-b4f1-422ff7f77b30
 #=╠═╡ notebook_exclusive
-@test tropocentric_rotation_matrix(60°,0°) == SA_F64[-√3/2 1/2 0;0 0 1;1/2 √3/2 0]
+@test _rotation_matrix(Val(:ENUfromECEF),60°,0°) == SA_F64[-√3/2 1/2 0;0 0 1;1/2 √3/2 0]
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ ef20e76d-8d2b-4e79-89bf-16743d74a063
-tropocentric_rotation_matrix(-90°,10°)
-
-# ╔═╡ 7342d9cd-6684-433d-bd21-e563f7bcd393
+# ╔═╡ f584b127-a13a-4ff2-af00-c603e3a83c6d
 md"""
-### Tropocentric Origin
+### SatViewTransformation Type
 """
 
-# ╔═╡ b4a74622-491a-435d-ac63-3f3892cb47a0
+# ╔═╡ d5d5004e-da79-436d-9c74-6a4eef92edec
+abstract type OriginTransformation <: CoordinateTransformations.Transformation end
+
+# ╔═╡ df94ac1c-9507-4951-9405-182ba8f74081
 md"""
-The generation of the TropocentricOrigin takes some time so (~500ns on my laptop) so it might be worth it to pre-compute this in some cases rather than re-generating this from the LLA coordinates of the user every time a calculation of the look angles needs to be performed.
+All `OriginTransformations` are used to transform between coordinates in different CRS that represent points in the vicinity of the Earth.
+
+For this reason, all transformations will assume to have the origin of the CRS expressed in ECEF coordinates.
+
+All `OriginTransformations` must have the following 3 fields:
+- `origin::Svector{3,Float64}`: The SVector containing the ECEF coordinates of the CRS Origin
+- `R::RotMatrix3{Float64}`: The rotation matrix that is needed to rotate between the starting CRS to the target CRS
+- `ellipsoid::Ellipsoid{Float64}`: The ellipsoid that is used for computing geodetic points from the transformation
 """
 
-# ╔═╡ e0df66c4-8212-4c9c-93f3-bd992a97092a
-struct TropocentricOrigin
-	"Geodetic coordinates (longitude, latitude and altitude above the reerence ellipsoid) of the tropocentric CRS origin"
-	lla::LLA
-	"ECEF coordinates of the tropocentric CRS origin"
-	ecef::SVector{3,Float64}
-	"Rotation matrix for the tropocentric transformation"
-	R::RotMatrix3{Float64}
-	"Reference ellipsoid used in the transformation"
-	ellipsoid::Ellipsoid{Float64}
-	
-	# Make the contructors starting from either the LLA or the ECEF position
-	function TropocentricOrigin(lla::LLA; ellipsoid = wgs84_ellipsoid)
-		ecef = geodetic_to_ecef(lla; ellipsoid = ellipsoid)
-		R = tropocentric_rotation_matrix(lla.lat,lla.lon)
-		new(lla,ecef,R,ellipsoid)
-	end	
-	function TropocentricOrigin(ecef::SVector{3,<:AbstractFloat}; ellipsoid = wgs84_ellipsoid)
-		lla = LLA(ecef_to_geodetic(ecef; ellipsoid = ellipsoid)...)
-		R = tropocentric_rotation_matrix(lla.lat,lla.lon)
-		new(lla,ecef,R,ellipsoid)
+# ╔═╡ 04c61bc0-c9d4-43e2-b5c8-6e6eb6049dce
+macro origin_transformation(name)
+	expr = quote
+		struct $(name) <: OriginTransformation
+			"ECEF coordinates of the CRS origin"
+			origin::SVector{3,Float64}
+			"Rotation matrix for the tropocentric transformation"
+			R::RotMatrix3{Float64}
+			"Reference ellipsoid used in the transformation"
+			ellipsoid::Ellipsoid{Float64}
+		end
+		function $(name)(lla::LLA;ellipsoid = wgs84_ellipsoid)
+			origin = geodetic_to_ecef(lla.lat,lla.lon,lla.alt;ellipsoid=ellipsoid)
+			R = _rotation_matrix($(Meta.quot(name)),lla.lat,lla.lon)
+			$(name)(origin,R,ellipsoid)
+		end
+		function $(name)(origin::StaticVector{3,Float64};ellipsoid = wgs84_ellipsoid)
+			lla = LLA(ecef_to_geodetic(origin;ellipsoid=ellipsoid)...)
+			R = _rotation_matrix($(Meta.quot(name)),lla.lat,lla.lon)
+			$(name)(origin,R,ellipsoid)
+		end
 	end
+	esc(expr)
 end
-
-# ╔═╡ 11e7154b-9da0-46be-9486-a3a028520fb5
-function Base.isapprox(x::T,y::T;kwargs...) where T <: Union{LLA,TropocentricOrigin,Ellipsoid}
-	for s ∈ fieldnames(T)
-		f = Base.isapprox(getfield(x,s),getfield(y,s);kwargs...)
-		f || return false
-	end
-	return true
-end
-
-# ╔═╡ 0b6d85c5-c80b-4439-bf6f-309af42729b3
-#=╠═╡ notebook_exclusive
-@test TropocentricOrigin(LLA(10,10,1000)) ≈ TropocentricOrigin(LLA(10,10,1000) |> geodetic_to_ecef)
-  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ a1ba94a9-965a-47b0-a2af-1b577a22bd50
 md"""
-### ECEF <-> UVW
+### ECEF <-> ENU
 """
 
-# ╔═╡ e19794aa-a667-4c7f-a067-d29db663f897
-begin
-struct UVWfromECEF <: Transformation
-	origin::TropocentricOrigin
-end
-	
-function (trans::UVWfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
-	uvw = trans.origin.R * (ecef - trans.origin.ecef)
-end
-end
+# ╔═╡ 8ed9af12-2fff-4e87-a5d8-8fc823125d1f
+# Test that the inversion works properly
+@test SA_F64[1e6,1e6,1e6] |> ENUfromECEF(LLA(22,12,0)) |> inv(ENUfromECEF(LLA(22,12,0))) ≈ SA_F64[1e6,1e6,1e6]
 
-# ╔═╡ 11fbbb1a-dbe0-4501-99be-1a32843e4f63
-ecef2uvw = UVWfromECEF(TropocentricOrigin(LLA(0,0,0)))
+# ╔═╡ fbc17dea-1228-483b-a369-52cf1ec6de10
+#=╠═╡ notebook_exclusive
+ecef_example = SA_F64[1e6,1e6,1e6]
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 490efc34-046d-49c3-a7ad-8e36c9ed6c62
 md"""
-### ERA <-> UVW
+### ERA <-> ENU
 """
 
 # ╔═╡ 7dea3c32-9adf-47cb-880e-83ee272651ec
 begin
 	# The transformation between ERA and tropocentric is simply a transformation between spherical and cartesian coordinates
-struct ERAfromUVW <: Transformation end
+struct ERAfromENU <: CoordinateTransformations.Transformation end
+struct ENUfromERA <: CoordinateTransformations.Transformation end
 	
-function (::ERAfromUVW)(uvw::StaticVector{3,T}) where T
-	x,y,z = uvw
+Base.inv(::ERAfromENU) = ENUfromERA()
+Base.inv(::ENUfromERA) = ERAfromENU()
+	
+function (::ERAfromENU)(enu::StaticVector{3,T}) where T
+	x,y,z = enu
 	r = hypot(x, y, z)
 	θ = r == 0 ? 0 : acos(z/r)
 	ϕ = r == 0 ? 0 : atan(y,x)
 	ERA((π/2 - θ) * rad,r * m, ϕ * rad)
 end
+function (::ENUfromERA)(era::ERA)
+	θ = π/2 - (uconvert(u"rad",era.el) |> ustrip)
+	r = uconvert(u"m",era.r) |> ustrip
+	φ = uconvert(u"rad",era.az) |> ustrip
+	sθ,cθ = sincos(θ)
+	sφ,cφ = sincos(φ)
+	x = r * sθ * cφ 
+	y = r * sθ * sφ 
+	z = r * cθ
+	# Return the ECEF coordinates
+	return SVector(x,y,z)
+end
 end
 
+# ╔═╡ f48de77f-bc86-4a48-b422-b1283ba469a0
+#=╠═╡ notebook_exclusive
+@benchmark $ERAfromENU()($ecef_example)
+  ╠═╡ notebook_exclusive =#
 
-# ╔═╡ ffec702e-ea68-4da1-9361-cb9d5a58769c
-ecef2uvw(SA_F64[wgs84_ellipsoid.a + 600e3,1e3,1e3]) |> ERAfromUVW()
+# ╔═╡ c118d97b-9f00-4729-bec3-d4860d1ada53
+#=╠═╡ notebook_exclusive
+let
+	era = ERAfromENU()(ecef_example)
+	@benchmark $ENUfromERA()($era)
+end
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 6690727c-1adb-4334-a756-609bf8386693
 md"""
@@ -498,40 +537,17 @@ The transformations defined here allow going from the ECEF coordinates of a sate
 The satellite position is expected in ECEF because the altitude of a satellite in orbit above the reference ellipsoid changes with latitude (if the ellipsoid is not a sphere), so by forcing the user to provide ECEF coordinates one has to think about the transformation and there is less risk of putting the same reference orbit altitude regardless of the latitude
 """
 
-# ╔═╡ 4ee2b3d2-df5a-4468-8b27-fb2deff92230
-begin
-struct ERAfromECEF <: Transformation
-	origin::TropocentricOrigin
-end
-	
-function (trans::ERAfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
-	era = (ERAfromUVW() ∘ UVWfromECEF(trans.origin))(ecef)
-end
-end
-
-# ╔═╡ 8cbfefcb-7d3d-49bd-ab6d-d561e118d211
-ecef2era = ERAfromECEF(TropocentricOrigin(LLA(0,0,0)))
+# ╔═╡ 8c493d0e-5e87-45d5-a118-3bd025ff6ea0
+#=╠═╡ notebook_exclusive
+# Test correct forward and reverse pass
+@test ERA(10,600km,20) |> ECEFfromERA(LLA(10,20,0)) |> ERAfromECEF(LLA(10,20,0)) ≈ ERA(10,600km,20)
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ e289acf4-2390-4c5f-8183-0584da9195c4
-ecef2era(SA_F64[wgs84_ellipsoid.a + 600e3,0,0])
-
-# ╔═╡ b7318a55-2544-4f00-b815-d73854fae191
-ecef2era(SA_F64[wgs84_ellipsoid.a + 600e3,1e3,0])
-
-# ╔═╡ 5d3f7abb-a5a1-47a9-acac-0d5c58c7043c
-ecef2era(SA_F64[wgs84_ellipsoid.a + 600e3,1e3,1e3])
-
-# ╔═╡ 50c37c6b-5671-4434-b5b6-c60cb6a8617c
-lla_origin = LLA(10,0,0)
-
-# ╔═╡ 86dde47b-1435-4aa5-91f8-d5e107939b3a
-sat_ecef = SA_F64[wgs84_ellipsoid.a + 6000e3,1e3,1e3]
-
-# ╔═╡ 33a1d133-6c74-4f63-a405-b61f285abf8c
-ERAfromECEF(TropocentricOrigin(lla_origin;ellipsoid=Ellipsoid(wgs84_ellipsoid.a,0)))(sat_ecef)
-
-# ╔═╡ 6614b4b5-8ccf-42e7-a9db-6ab808813ed3
-ERAfromECEF(TropocentricOrigin(lla_origin))(sat_ecef)
+#=╠═╡ notebook_exclusive
+# Test that elevation is 90 for a point above
+@test ecef2era(SA_F64[wgs84_ellipsoid.a + 600e3,0,0]) ≈ ERA(90°,600km,0°)
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 23b0b1d4-1de0-4e83-be23-45236319f70a
 md"""
@@ -545,67 +561,395 @@ The computation of the lat/long position of a point on earth given the view angl
 When considering the more appropriate ellipsoid of revolution model, computations become a bit more complex but the formulation can be found in [this recent paper](https://arc.aiaa.org/doi/10.2514/1.G004156)
 
 The paper exploits the cosine directions of the pointing from the spacecraft, expressed in the earth reference frame. These can be obtained directly from the pointing U,V coordinates from the satellite point of view by performing a rotation.
-This rotation is the one needed to transform the SatView CRS (origin on the satellite and z-axis pointing at nadir) to the earth reference frame.
 
-This rotation to bring the SatView CRS to the Earth CRS can be expressed in terms of [Euler angles](https://en.wikipedia.org/wiki/Euler_angles#Proper_Euler_angles_2).
-Assuimng a X₁Z₂X₃ rotation, the Euler angles can be computed as follows
+We will identify the SatView CRS with axis names ``U``, ``V`` and ``W``; with axis ``W`` pointing towards the nadir direction, axis ``V`` pointing towards North and ``U`` pointing towards West (so as to have ``UVW`` following the right-hand rule).
+
+Similarly, we will identify the earth reference frame with axes named ``X``, ``Y`` and ``Z`` and following the standard ECEF orientation with ``Z`` exiting the north pole, ``X`` exiting the equator at the longitude of the greenwhich meridian and ``Y`` pointed according to the right-hand rule.
+
+The rotation needed to go from SatView to ECEF coordinates is the one needed to have bring the ``UVW`` axes to coincide with the ``XYZ`` ones (except the translation to align the origins).
+It easy to prove that this can be achieved by rotating ``UVW`` first around ``U`` counter-clockwise by ``α = 270° - lat_s`` (obtaining the rotated CRS ``U'V'W'``), and then around ``W'`` counter-clockwise by ``γ = 90° - lon_s`` 
+
+
+
+Exploiting the definitions of [rotation matrices](https://en.wikipedia.org/wiki/Rotation_matrix#Basic_rotations) and remembering that for change of CRS we are dealing with [*passive*](https://en.wikipedia.org/wiki/Active_and_passive_transformation) transformations, we can define the rotation matrix to translate points defined in the SatView CRS to the earth reference frame CRS as:
 $(texeq("
-\\begin{aligned}
-α &= 270° - lat_s \\
-β &= 90° -lon_s \\
-γ &= 0°
-\\end{aligned} \\label{euler-angles}
+\\mathbf{R}_{S→E} = 
+\\begin{bmatrix}
+	{\\rm sin}(lon_s) & -{\\rm sin}(lat_s){\\rm cos}(lon_s)& -{\\rm cos}(lat_s){\\rm cos}(lon_s) \\
+	-{\\rm cos}(lon_s) & -{\\rm sin}(lat_s){\\rm sin}(lon_s) & - {\\rm cos}(lat_s){\\rm sin}(lon_s) \\
+	0 & {\\rm cos}(lat_s) & -{\\rm sin}(lat_s)
+\\end{bmatrix}
 "))
 
-Exploiting the definitions for rotation matrices in the [wiki page](https://en.wikipedia.org/wiki/Euler_angles#Rotation_matrix) and remembering we are considering the X₁Z₂X₃ case, we can define the rotation matrix to translate points defined in the SatView CRS to the earth reference frame CRS as:
-$(texeq("
-\\mathbf{R}_{SatView} = \\begin{bmatrix}
-	{\\rm cos}(lon_s) & -{\\rm sin}(lat_s){\\rm sin}(lon_s)& {\\rm cos}(lat_s){\\rm sin}(lon_u) \\
-	{\\rm sin}(lon_s) & {\\rm sin}(lat_s){\\rm cos}(lon_s) & - {\\rm cos}(lat_s){\\rm cos}(lon_u) \\
-	0 & {\\rm cos}(lat_s) & {\\rm sin}(lat_s)
-\\end{bmatrix}.
-"))
-
-$(eqref("euler-angles"))
 """
 
-# ╔═╡ b9044c02-a02b-4f3a-827a-6da38e70225f
+# ╔═╡ f12cf299-1479-4c48-81e5-8a6a7c916bce
+function testt(pointing_ecef, sat_ecef, a, b)
+	
+	
+	ellps_coeffs = SA_F64[b,b,a]
+	
+	v1 = pointing_ecef .* ellps_coeffs
+	v2 = sat_ecef .* ellps_coeffs
+	
+	α = v1'v1
+	β = 2v1'v2
+	γ = v2'v2 - (a*b)^2
+	
+	# Compute the determinant
+	Δint = β^2 - 4*α*γ
+	Δint/4, a^2, b^2
+end	
+
+# ╔═╡ c03eb646-567b-48f7-b49a-ce6fe01dd88d
+xx = [normalize(@SVector rand(3)) for _ in 1:1000]
+
+# ╔═╡ fc3782b4-19f7-49d2-b4f2-0b6709319e53
+@benchmark $testt.($xx,Ref(SA_F64[1.23781e8,1000,1000]),6.37814e6,6.35675e6)
+
+# ╔═╡ 944246ad-f641-408a-8512-428915ca5ba4
+# Function to compute the determinant used in equation 38 of the paper. a is the semi-major axis and b the semi-minor one
+function compute_Δint(pointing_ecef, sat_ecef, a, b)
+	# Extract the components of the positions
+	n₁, n₂, n₃ = pointing_ecef
+	xₛ, yₛ, zₛ = sat_ecef
+	# Pre-compute some powers
+	n₁², n₂², n₃² = pointing_ecef .^ 2
+	xₛ², yₛ², zₛ² = sat_ecef .^ 2
+	a² = a^2
+	a⁴ = a^4
+	b² = b^2
+	b⁴ = b^4
+	
+	# Compute the determinant
+	Δint = 
+	2n₁ * n₂ * xₛ * yₛ * b⁴ + 
+	2n₁ * n₃ * xₛ * zₛ * a² * b² + 
+	2n₂ * n₃ * yₛ * zₛ * a² * b² +
+	-n₁² * yₛ² * b⁴ +
+	-n₁² * zₛ² * a² * b² +
+	n₁² * a² * b⁴ +
+	-n₂² * xₛ² * b⁴ +
+	-n₂² * zₛ² * a² * b² +
+	n₂² * a² * b⁴ +
+	-n₃² * xₛ² * a² * b² + # This term is wrong in the paper (it has n₂ instead of n₃)
+	-n₃² * yₛ² * a² * b² +
+	n₃² * a⁴ * b² 
+	
+	return Δint, a², b²
+end	
+
+# ╔═╡ 845c8e2c-7d0b-4d3d-b253-44c627982088
+@benchmark $compute_Δint.($xx,Ref(SA_F64[1.23781e8,1000,1000]),6.37814e6,6.35675e6)
+
+# ╔═╡ e20298df-ba6c-4c6f-8e24-e43065f80fd6
+#=╠═╡ notebook_exclusive
+# Compare with the result obtained with the original matlab routine
+@test compute_Δint([-.944818,-.200827,-.258819],[1.23781e7,1000,1000],6.37814e6,6.35675e6) ≈ 3.951042393535238e40
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 98c41387-427f-4aa3-b56d-5ea6df49c2fb
+#=╠═╡ notebook_exclusive
+compute_Δint([-.944818,-.200827,-.258819],[1.23781e8,1000,1000],6.37814e6,6.35675e6)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5b226be3-ad65-4cb1-9226-20786c76c4c1
+# Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth 
+function earth_intersection2(pointing_ecef,sat_ecef,a,b)
+	ellps_coeffs = SA_F64[b,b,a]
+	
+	v1 = pointing_ecef .* ellps_coeffs
+	v2 = sat_ecef .* ellps_coeffs
+	
+	α = v1'v1
+	β = 2v1'v2
+	γ = v2'v2 - (a*b)^2
+	
+	# Compute the discriminant
+	Δ = β^2 - 4*α*γ
+	
+	# If the discriminant is negative, no intersection exists
+	Δ < 0 && return SA_F64[NaN,NaN,NaN]
+	
+
+	# Compute the t with the lowest 
+	t₁ = (-β + √Δ)/2α	
+	t₂ = (-β - √Δ)/2α
+	t = abs(t₁) < abs(t₂) ? t₁ : t₂
+	
+	# Compute the ecef coordinates of the intersectinon on earth
+	ecef = sat_ecef + t*pointing_ecef
+end
+
+# ╔═╡ f2dfb010-76f1-4f0e-9598-256983a07478
+# Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth 
+function earth_intersection(pointing_ecef,sat_ecef,a,b)
+	# Compute the discriminant of the equation
+	Δint, a², b² = compute_Δint(pointing_ecef,sat_ecef,a,b)
+	
+	# If the discriminant is negative, no intersection exists
+	Δint < 0 && return SA_F64[NaN,NaN,NaN]
+	
+	sΔint = √Δint
+	
+	
+	# Compute the left part of the numerator in equation (38)
+	num1 = -(pointing_ecef .* sat_ecef)'SA_F64[b²,b²,a²]
+
+	# Compute the t with the lowest 
+	t₁ = num1 + sΔint	
+	t₂ = num1 - sΔint
+	t = (abs(t₁) < abs(t₂) ? t₁ : t₂) / ((pointing_ecef.^2)'SA_F64[b²,b²,a²])
+	
+	# Compute the ecef coordinates of the intersectinon on earth
+	ecef = sat_ecef + t*pointing_ecef
+end
+
+# ╔═╡ 7510f18b-dcb5-47ec-95b2-b5b13ff49288
+@benchmark $earth_intersection(SA_F64[-.944818,-.200827,-.258819],SA_F64[1.23781e7,1000,1000],6.37814e6,6.35675e6)
+
+# ╔═╡ 462a04b4-06bc-4b40-a3f9-07b370ffb2de
+@benchmark $earth_intersection2(SA_F64[-.944818,-.200827,-.258819],SA_F64[1.23781e7,1000,1000],6.37814e6,6.35675e6)
+
+# ╔═╡ ee48ec54-9aee-4b27-823e-8c4ab08ebc31
+#=╠═╡ notebook_exclusive
+# Test the results with the matlab outputs
+@test earth_intersection([-.944818,-.200827,-.258819],[1.23781e7,1000,1000],6.37814e6,6.35675e6) ≈ [5978510.87809898,-1359272.86163475,-1752073.3505726]
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ a3e0e082-427b-4b2e-905f-13be7d786172
+#=╠═╡ notebook_exclusive
+ut_h = 10000
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 47712f4b-bf4c-4369-a305-581c21680c0c
+#=╠═╡ notebook_exclusive
+uv = (.5,.5)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 060840a7-06f7-4952-b575-131e728bc822
 md"""
-$$c₁ = cos(270-lat_s) = -sin(lat_s)$$
-$$s₁ = sin(270-lat_s) = -cos(lat_s)$$
+### ECEF <-> WND
 """
 
-# ╔═╡ 7ac21bdc-1a22-41cd-801f-d61950b5c647
-rot1(lat,lon) = 
-SA_F64[
-	cos(lon) -sin(lat)*sin(lon) cos(lat)*sin(lon)
-	sin(lon) sin(lat)*cos(lon) -cos(lat)cos(lon)
-	0 cos(lat) sin(lat)
-	] |> inv
+# ╔═╡ a3049c77-924f-4275-848e-9a3d8dbf824e
+md"""
+We define here the `WND` CRS, which is basically the ENU coordinate system rotated ``180°`` around the N axis.
+This CRS, albeit uncommon, is useful when dealing with the Satellite point of view and is also the same CRS where the UV coordinates are defined.
+"""
 
-# ╔═╡ 20308d5c-c83a-4105-b5b7-3067f14f6398
-rot2(lat,lon) = RotZX(π/2 -deg2rad(lon),3π/2-deg2rad(lat)) |> inv
+# ╔═╡ ef883071-3fad-4470-a893-ccaf1e8f1dcc
+begin
+	# Define the relevant rotation matrix
+		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)
+		# Precompute the sines and cosines
+		sλ, cλ = sincos(lat)
+		sφ, cφ = sincos(lon)
+		
+		# Generate the rotation matrix as a StaticArray
+		return SA_F64[
+			 sφ -sλ*cφ -cλ*cφ
+			-cφ -sλ*sφ -cλ*sφ
+			 0   cλ    -sλ
+			] |> RotMatrix
+	end
+	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon) = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
+end
 
-# ╔═╡ 9feb8336-c1d7-40b8-953d-87ef0a6d4c11
-rot1(.5,1)
+# ╔═╡ 0b255a91-0420-4943-9d2d-669489c07b0d
+begin
+	# Define the transformations structs and constructors
+	@origin_transformation ECEFfromENU
+	@origin_transformation ENUfromECEF
+	
+	Base.inv(t::ECEFfromENU) = ENUfromECEF(t.origin,inv(t.R),t.ellipsoid)
+	Base.inv(t::ENUfromECEF) = ECEFfromENU(t.origin,inv(t.R),t.ellipsoid)
+	
+	function (trans::ECEFfromENU)(enu::StaticVector{3,<:AbstractFloat})
+		ecef = trans.R * enu + trans.origin
+	end
+	function (trans::ENUfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+		enu = trans.R * (ecef - trans.origin)
+	end
+end	
 
-# ╔═╡ 9ad30886-ac69-4903-9d78-34f7bf67ca52
-RotZX(-1,3π/2-.5)
+# ╔═╡ 3a4b0cd8-aa77-412d-b512-6daaceefc481
+# Test that doing forward and reverse pass leads to the same original LLA point
+@test (LLA(10,15,1000) |> geodetic_to_ecef |> ENUfromECEF(LLA(12,12,0)) |> ECEFfromENU(LLA(12,12,0)) |> ecef_to_geodetic |> x -> LLA(x...)) ≈ LLA(10,15,1000)
 
-# ╔═╡ 7e5e6fec-9f52-4d61-a08a-b85b92e4d2d6
-latlong = (-45°, 0°)
+# ╔═╡ ceb05ca6-adea-420a-bcc0-809c19709da2
+# Test that the enu coordinates with CRS origin on the equator/greenwhich meridian for a point that has only X ECEF coordinates results in an ENU coordinate that only has the third component
+@test ENUfromECEF(LLA(0,0,0);ellipsoid=Ellipsoid(6371e3,0))(SA_F64[1e7,0,0]) ≈ SA_F64[0,0,1e7-6371e3]
 
-# ╔═╡ 6a7a6c49-2183-4a89-a984-923983d8dac5
-n = SA_F64[0,0,1]
+# ╔═╡ 11fbbb1a-dbe0-4501-99be-1a32843e4f63
+#=╠═╡ notebook_exclusive
+ecef2enu = ENUfromECEF(LLA(0,0,0))
+  ╠═╡ notebook_exclusive =#
 
-# ╔═╡ eef9c1ca-5192-45df-8ace-832fdb01776c
-rot1(latlong...) * n
+# ╔═╡ 4ee2b3d2-df5a-4468-8b27-fb2deff92230
+begin
+	# Define the transformations structs and constructors
+	@origin_transformation ECEFfromERA
+	@origin_transformation ERAfromECEF
+	
+	Base.inv(t::ECEFfromERA) = ERAfromECEF(t.origin,inv(t.R),t.ellipsoid)
+	Base.inv(t::ERAfromECEF) = ECEFfromERA(t.origin,inv(t.R),t.ellipsoid)
+	
+	function (trans::ECEFfromERA)(era::ERA)
+		ecef = trans.R * ENUfromERA()(era) + trans.origin
+	end
+	function (trans::ERAfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+		era = ERAfromENU()(trans.R * (ecef - trans.origin))
+	end
+end	
 
-# ╔═╡ ce2d9371-6e35-453d-b0f0-74e06c0bb2dc
-rot2(latlong...) * n
+# ╔═╡ 8cbfefcb-7d3d-49bd-ab6d-d561e118d211
+#=╠═╡ notebook_exclusive
+ecef2era = ERAfromECEF(LLA(0,0,0))
+  ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 8376d759-b29b-4167-b4a0-0824d9a5c27a
-RotXZX(0,-1,3π/2-.5)
+# ╔═╡ b7318a55-2544-4f00-b815-d73854fae191
+#=╠═╡ notebook_exclusive
+ecef2era(SA_F64[wgs84_ellipsoid.a + 600e3,1e3,0])
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5d3f7abb-a5a1-47a9-acac-0d5c58c7043c
+#=╠═╡ notebook_exclusive
+ecef2era(SA_F64[wgs84_ellipsoid.a + 600e3,1e3,1e3])
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 52f98632-2de4-4a02-aa29-b734d9ba3c03
+begin
+	# Define the transformations structs and constructors
+	@origin_transformation ECEFfromWND
+	@origin_transformation WNDfromECEF
+	
+	Base.inv(t::ECEFfromWND) = WNDfromECEF(t.origin,inv(t.R),t.ellipsoid)
+	Base.inv(t::WNDfromECEF) = ECEFfromWND(t.origin,inv(t.R),t.ellipsoid)
+	
+	function (trans::ECEFfromWND)(wnd::StaticVector{3,<:AbstractFloat})
+		ecef = trans.R * wnd + trans.origin
+	end
+	function (trans::WNDfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+		wnd = trans.R * (ecef - trans.origin)
+	end
+end	
+
+# ╔═╡ 8410816c-e40e-429f-af1a-5d98e30974ac
+#=╠═╡ notebook_exclusive
+wnd2ecef = ECEFfromWND(LLA(0,0,600km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f2eca6f6-b9c7-4075-896a-f3d3b18ed612
+#=╠═╡ notebook_exclusive
+earth_intersection(wnd2ecef.R*SA_F64[uv...,sqrt(1-sum(uv.^2))],wnd2ecef.origin,wgs84_ellipsoid.a+ut_h,wgs84_ellipsoid.b+ut_h) |> ecef_to_geodetic
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 6436280e-d936-49e4-956d-5b1209bc6904
+#=╠═╡ notebook_exclusive
+@benchmark $earth_intersection($(wnd2ecef.R)*SA_F64[$uv...,sqrt(1-sum($uv.^2))],$(wnd2ecef.origin),$(wgs84_ellipsoid.a),$(wgs84_ellipsoid.b)) |> ecef_to_geodetic
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 1127a650-58bb-445f-bd4f-0ea5e5fea20f
+#=╠═╡ notebook_exclusive
+satwnd = ECEFfromWND(LLA(0,0,600km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 9777c99e-bd9d-497d-9301-53a5cf39fd6f
+#=╠═╡ notebook_exclusive
+@test satwnd(SA_F64[0,0,600e3]) ≈ SA_F64[wgs84_ellipsoid.a,0,0]
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 8635e24e-66cc-4390-91a6-f19bd980c313
+md"""
+## ECEF <-> UV
+"""
+
+# ╔═╡ 33c44e13-14fd-4c30-bde4-7e37f0f83b6e
+begin
+	# Define the transformations structs and constructors
+	@origin_transformation ECEFfromUV
+	@origin_transformation UVfromECEF
+	
+	Base.inv(t::ECEFfromUV) = UVfromECEF(t.origin,inv(t.R),t.ellipsoid)
+	Base.inv(t::UVfromECEF) = ECEFfromUV(t.origin,inv(t.R),t.ellipsoid)
+	
+	function (trans::ECEFfromUV)(uv::StaticVector{2,<:AbstractFloat},h::Real=0.0)
+		# Check that the uv coordinates are valid
+		uv² = sum(uv .^ 2)
+		@assert uv² <= 1 "u² + v² > 1, the given uv coordinate vector is not valid"
+		# Compute the 3d versor identifying the pointing direction from the satellite in WND coordinates
+		p̂ = SA_F64[uv..., sqrt(1 - uv²)]
+		# Translate the versor in ECEF coordinates
+		n̂ = trans.R * p̂
+		sat_ecef = trans.origin
+		a,b = trans.ellipsoid.a, trans.ellipsoid.b
+		ecef = earth_intersection(n̂,sat_ecef,a+h,b+h)
+	end
+	function (trans::UVfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+		# Find the coordinates in the West-North-Down CRS
+		wnd = trans.R * (ecef - trans.origin)
+		
+		# Normalize the wnd vector
+		uv = SVector(wnd[1],wnd[2]) ./  norm(wnd)
+	end
+end	
+
+# ╔═╡ 413f7721-57f3-4406-93c3-9d7dfae890ef
+md"""
+## LLA <-> UV
+"""
+
+# ╔═╡ 9858a275-4255-4e5d-9538-9f961f349f9a
+md"""
+We define here the transformations to switch between the satellite point of view in UV and the geodesic coordinates (LLA) of points on or above earth.
+The computation is performed accounting for a custom ellipsoid shape of the earth (defaults to the WGS84 one) and an optional target height (above the reference ellipsoid) can be provided when going from UV to LLA.
+This target height is used to find the correct geodesic coordinate lat,long when extending the satellite view direction to find the intersection (the same pointing direction results in different lat,long values depending on the target height).
+"""
+
+# ╔═╡ 28d6c2a9-80e3-4aa3-aa48-add2e2c9be06
+begin
+	# Define the transformations structs and constructors
+	@origin_transformation LLAfromUV
+	@origin_transformation UVfromLLA
+	
+	Base.inv(t::LLAfromUV) = UVfromLLA(t.origin,inv(t.R),t.ellipsoid)
+	Base.inv(t::UVfromLLA) = LLAfromUV(t.origin,inv(t.R),t.ellipsoid)
+	
+	function (trans::LLAfromUV)(uv::StaticVector{2,<:AbstractFloat},h::Real=0.0)
+		ecef = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv)
+		lla = LLA(ecef_to_geodetic(ecef;ellipsoid = trans.ellipsoid)...)
+	end
+	function (trans::UVfromLLA)(lla::LLA)
+		ecef = geodetic_to_ecef(lla;ellipsoid=trans.ellipsoid)
+		uv = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef)
+	end
+end	
+
+# ╔═╡ a2b6236c-34cd-4d58-8c5c-5b5245da77c1
+#=╠═╡ notebook_exclusive
+uv2lla = LLAfromUV(LLA(0,0,37000km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 2b6e1005-9889-4318-afa9-289a0f15c1fe
+#=╠═╡ notebook_exclusive
+@benchmark $uv2lla(SVector(.1,.1))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ d9ecf801-1738-43f3-a417-bb38785d418c
+#=╠═╡ notebook_exclusive
+# Test that givin uv coordinates with norm greater than 1 throws an error
+@test try
+	uv2lla(SVector(1,.5))
+	return false
+catch e
+	if e.msg == "u² + v² > 1, the given uv coordinate vector is not valid"
+		return true
+	else
+		return false
+	end
+end
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ e5b30ed2-9868-4ecb-86c6-ef63bdf0e6fb
 md"""
@@ -902,9 +1246,6 @@ ellps = wgs84_ellipsoid
 # ╔═╡ 645a128c-7283-4fbc-a737-e078b51a4f65
 sattopoorigin = TropocentricOrigin(LLA(0,0,0km);ellipsoid=ellps)
 
-# ╔═╡ 0ea12ef9-512d-4bfb-8c25-58cc819bb783
-satview = UVWfromECEF(sattopoorigin)
-
 # ╔═╡ 64503815-a59e-4f8a-98d1-a1030ee64498
 uvwp = satview(geodetic_to_ecef(LLA(10,20,0);ellipsoid=ellps))
 
@@ -959,6 +1300,7 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 PlutoTest = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
 PlutoUtils = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
@@ -972,6 +1314,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 BenchmarkTools = "~1.1.3"
 CoordinateTransformations = "~0.6.1"
 DocStringExtensions = "~0.8.5"
+MacroTools = "~0.5.7"
 Parameters = "~0.12.2"
 PlutoTest = "~0.1.0"
 PlutoUtils = "~0.3.4"
@@ -1189,6 +1532,12 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "0fb723cd8c45858c22169b2e42269e53271a6df7"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.7"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -1465,9 +1814,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 # ╔═╡ Cell order:
 # ╠═590cdbce-fc45-11eb-2fde-1d27628251b7
-# ╠═bcee47c1-81c1-4c77-af09-22c04374fa4f
 # ╠═9e29c3ea-2cda-4726-86a3-20cabdb20245
-# ╠═d56dc0b2-204c-410e-ad75-f6abbdae1f7a
 # ╠═74422a23-0760-470f-9e1e-43b8c3972f65
 # ╠═2ad47a80-881a-4ac5-a61e-0691e6bf35e0
 # ╠═77e399b7-0f7e-4ff1-9f8e-fd0f3408e894
@@ -1480,6 +1827,8 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═140481fb-9e22-47b8-8118-37811ca04bdd
 # ╟─0de61675-b5f5-4c57-afdb-f5ae2ff6b0c1
 # ╠═6bc1a3ac-414c-422b-9b6f-c7efea145a8c
+# ╠═85b0e8bd-4255-4b94-a2d8-70e487db60cb
+# ╠═0e7e61fd-1de0-4a73-aebb-33af60ba7804
 # ╠═75d0fc45-87e9-42bc-aab5-dae0cf099eaa
 # ╠═34087d1f-9773-4a52-b153-8ffd728deb52
 # ╠═efb91b19-8e1e-4a26-ad25-e67f3453c018
@@ -1491,6 +1840,8 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═531ca4ea-cf0a-42bd-b84c-321c8993ee9c
 # ╠═490456a5-d6e3-4763-8ca2-5f4fe89e8473
 # ╠═5f121a73-4cdc-47a6-b505-d56baa060043
+# ╟─bb47e669-bf83-405e-bfe1-fb35c3c13d4c
+# ╠═0ad5adbf-4ffa-4a8b-bc3d-a2668d8495eb
 # ╟─bf534d5c-b861-4c4c-b645-7848b3eaf0fe
 # ╟─f0758e99-9f2b-4934-88eb-7e62cdd5c51f
 # ╠═41599efd-45b8-471c-a8ec-2fde36b4f58f
@@ -1504,43 +1855,66 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─40333531-f0a3-451b-aa52-b6e26b242d34
 # ╠═5e3c2f13-d9ff-4f45-bb25-547ca5001e7b
 # ╟─184f69ae-06d3-4f6d-8526-dd4ab30fadad
+# ╠═f5e22bff-efc9-4a3c-a70f-8e800d325ae8
 # ╠═3179c657-aa27-4465-8a90-51ec991701c8
 # ╠═3d630992-f6f5-4af2-beea-171428580037
 # ╠═5c450408-fa09-4325-b4f1-422ff7f77b30
-# ╠═ef20e76d-8d2b-4e79-89bf-16743d74a063
-# ╟─7342d9cd-6684-433d-bd21-e563f7bcd393
-# ╟─b4a74622-491a-435d-ac63-3f3892cb47a0
-# ╠═e0df66c4-8212-4c9c-93f3-bd992a97092a
-# ╠═0b6d85c5-c80b-4439-bf6f-309af42729b3
+# ╟─f584b127-a13a-4ff2-af00-c603e3a83c6d
+# ╠═d5d5004e-da79-436d-9c74-6a4eef92edec
+# ╟─df94ac1c-9507-4951-9405-182ba8f74081
+# ╠═04c61bc0-c9d4-43e2-b5c8-6e6eb6049dce
 # ╟─a1ba94a9-965a-47b0-a2af-1b577a22bd50
-# ╠═e19794aa-a667-4c7f-a067-d29db663f897
+# ╠═0b255a91-0420-4943-9d2d-669489c07b0d
+# ╠═3a4b0cd8-aa77-412d-b512-6daaceefc481
+# ╠═8ed9af12-2fff-4e87-a5d8-8fc823125d1f
+# ╠═ceb05ca6-adea-420a-bcc0-809c19709da2
 # ╠═11fbbb1a-dbe0-4501-99be-1a32843e4f63
+# ╠═fbc17dea-1228-483b-a369-52cf1ec6de10
 # ╟─490efc34-046d-49c3-a7ad-8e36c9ed6c62
 # ╠═7dea3c32-9adf-47cb-880e-83ee272651ec
-# ╠═ffec702e-ea68-4da1-9361-cb9d5a58769c
+# ╠═f48de77f-bc86-4a48-b422-b1283ba469a0
+# ╠═c118d97b-9f00-4729-bec3-d4860d1ada53
 # ╟─6690727c-1adb-4334-a756-609bf8386693
 # ╟─dd231bb5-fc61-46ad-acb9-d21e75b2c618
 # ╠═4ee2b3d2-df5a-4468-8b27-fb2deff92230
 # ╠═8cbfefcb-7d3d-49bd-ab6d-d561e118d211
+# ╠═8c493d0e-5e87-45d5-a118-3bd025ff6ea0
 # ╠═e289acf4-2390-4c5f-8183-0584da9195c4
 # ╠═b7318a55-2544-4f00-b815-d73854fae191
 # ╠═5d3f7abb-a5a1-47a9-acac-0d5c58c7043c
-# ╠═50c37c6b-5671-4434-b5b6-c60cb6a8617c
-# ╠═86dde47b-1435-4aa5-91f8-d5e107939b3a
-# ╠═33a1d133-6c74-4f63-a405-b61f285abf8c
-# ╠═6614b4b5-8ccf-42e7-a9db-6ab808813ed3
 # ╟─23b0b1d4-1de0-4e83-be23-45236319f70a
-# ╠═a418f9b9-c3a8-4054-abd7-d29df23f8772
-# ╠═b9044c02-a02b-4f3a-827a-6da38e70225f
-# ╠═7ac21bdc-1a22-41cd-801f-d61950b5c647
-# ╠═20308d5c-c83a-4105-b5b7-3067f14f6398
-# ╠═9feb8336-c1d7-40b8-953d-87ef0a6d4c11
-# ╠═9ad30886-ac69-4903-9d78-34f7bf67ca52
-# ╠═7e5e6fec-9f52-4d61-a08a-b85b92e4d2d6
-# ╠═6a7a6c49-2183-4a89-a984-923983d8dac5
-# ╠═eef9c1ca-5192-45df-8ace-832fdb01776c
-# ╠═ce2d9371-6e35-453d-b0f0-74e06c0bb2dc
-# ╠═8376d759-b29b-4167-b4a0-0824d9a5c27a
+# ╟─a418f9b9-c3a8-4054-abd7-d29df23f8772
+# ╠═f12cf299-1479-4c48-81e5-8a6a7c916bce
+# ╠═845c8e2c-7d0b-4d3d-b253-44c627982088
+# ╠═c03eb646-567b-48f7-b49a-ce6fe01dd88d
+# ╠═fc3782b4-19f7-49d2-b4f2-0b6709319e53
+# ╠═944246ad-f641-408a-8512-428915ca5ba4
+# ╠═e20298df-ba6c-4c6f-8e24-e43065f80fd6
+# ╠═98c41387-427f-4aa3-b56d-5ea6df49c2fb
+# ╠═5b226be3-ad65-4cb1-9226-20786c76c4c1
+# ╠═f2dfb010-76f1-4f0e-9598-256983a07478
+# ╠═7510f18b-dcb5-47ec-95b2-b5b13ff49288
+# ╠═462a04b4-06bc-4b40-a3f9-07b370ffb2de
+# ╠═ee48ec54-9aee-4b27-823e-8c4ab08ebc31
+# ╠═8410816c-e40e-429f-af1a-5d98e30974ac
+# ╠═a3e0e082-427b-4b2e-905f-13be7d786172
+# ╠═47712f4b-bf4c-4369-a305-581c21680c0c
+# ╠═f2eca6f6-b9c7-4075-896a-f3d3b18ed612
+# ╠═6436280e-d936-49e4-956d-5b1209bc6904
+# ╟─060840a7-06f7-4952-b575-131e728bc822
+# ╟─a3049c77-924f-4275-848e-9a3d8dbf824e
+# ╠═ef883071-3fad-4470-a893-ccaf1e8f1dcc
+# ╠═52f98632-2de4-4a02-aa29-b734d9ba3c03
+# ╠═1127a650-58bb-445f-bd4f-0ea5e5fea20f
+# ╠═9777c99e-bd9d-497d-9301-53a5cf39fd6f
+# ╟─8635e24e-66cc-4390-91a6-f19bd980c313
+# ╠═33c44e13-14fd-4c30-bde4-7e37f0f83b6e
+# ╟─413f7721-57f3-4406-93c3-9d7dfae890ef
+# ╟─9858a275-4255-4e5d-9538-9f961f349f9a
+# ╠═28d6c2a9-80e3-4aa3-aa48-add2e2c9be06
+# ╠═a2b6236c-34cd-4d58-8c5c-5b5245da77c1
+# ╠═2b6e1005-9889-4318-afa9-289a0f15c1fe
+# ╠═d9ecf801-1738-43f3-a417-bb38785d418c
 # ╟─e5b30ed2-9868-4ecb-86c6-ef63bdf0e6fb
 # ╠═0c805467-20a7-42e3-9ca4-fe8dc8141725
 # ╠═41ab1efa-d53f-41e7-9347-fd5979e18c72
@@ -1575,7 +1949,6 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═6a27718a-ab6e-4fa5-a18d-5181253fb69c
 # ╠═ed8b3cd2-0b16-416e-b62d-668647d68631
 # ╠═645a128c-7283-4fbc-a737-e078b51a4f65
-# ╠═0ea12ef9-512d-4bfb-8c25-58cc819bb783
 # ╠═64503815-a59e-4f8a-98d1-a1030ee64498
 # ╠═10451ec4-335f-4985-a21a-eec5fbd69356
 # ╠═f7c26528-da9c-489d-9de8-e9d35df60c48
