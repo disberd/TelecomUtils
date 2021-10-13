@@ -8,5 +8,5 @@ k_B = 1.38064852e-23 # Boltzmann constant [m² kg / (s² K)]
 include("./utils.jl")
 
 export c_0, k_B
-export generate_regular_lattice, generate_hex_lattice, generate_square_lattice, db2lin, lin2db, f2λ, λ2f
+export generate_regular_lattice, generate_hex_lattice, generate_square_lattice, generate_rect_lattice, db2lin, lin2db, f2λ, λ2f
 end
