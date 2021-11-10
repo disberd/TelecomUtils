@@ -537,7 +537,7 @@ begin
 	LLAfromECEF() = LLAfromECEF(wgs84_ellipsoid)
 	ECEFfromLLA() = ECEFfromLLA(wgs84_ellipsoid)
 	
-	function (trans::LLAfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+	function (trans::LLAfromECEF)(ecef::StaticVector{3})
 		el = trans.ellipsoid
 		lat,lon,alt = ecef_to_geodetic(ecef;ellipsoid=el)
 		return LLA(lat,lon,alt)
@@ -717,10 +717,10 @@ begin
 	# Define the transformations structs and constructors
 	@user_transformation ECEF ENU
 	
-	function (trans::ECEFfromENU)(enu::StaticVector{3,<:AbstractFloat})
+	function (trans::ECEFfromENU)(enu::StaticVector{3})
 		ecef = trans.R * enu + trans.origin
 	end
-	function (trans::ENUfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+	function (trans::ENUfromECEF)(ecef::StaticVector{3})
 		enu = trans.R * (ecef - trans.origin)
 	end
 end	
@@ -936,14 +936,14 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation ECEF WND
 	
-	function (trans::ECEFfromWND)(wnd::StaticVector{3,<:AbstractFloat})
+	function (trans::ECEFfromWND)(wnd::StaticVector{3})
 		ecef = trans.R * wnd + trans.origin
 	end
 	# Tuple overload
 	(trans::ECEFfromWND)(tup::Tuple{<:Number, <:Number, <:Number}) = trans(SVector(tup))
 	
 	
-	function (trans::WNDfromECEF)(ecef::StaticVector{3,<:AbstractFloat})
+	function (trans::WNDfromECEF)(ecef::StaticVector{3})
 		wnd = trans.R * (ecef - trans.origin)
 	end
 	# Tuple overload
@@ -967,7 +967,7 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation ECEF UV
 	
-	function (trans::ECEFfromUV)(uv::StaticVector{2,<:AbstractFloat},h::Real=0.0)
+	function (trans::ECEFfromUV)(uv::StaticVector{2},h::Real=0.0)
 		# Check that the uv coordinates are valid
 		uv² = sum(uv .^ 2)
 		@assert uv² <= 1 "u² + v² > 1, the given uv coordinate vector is not valid"
@@ -982,7 +982,7 @@ begin
 	# Tuple overload
 	(trans::ECEFfromUV)(tup::Tuple{<:Number, <:Number}, h=0.0) = trans(SVector(tup), h)
 	
-	function (trans::UVfromECEF)(ecef::StaticVector{3,<:AbstractFloat}, ::ExtraOutput)
+	function (trans::UVfromECEF)(ecef::StaticVector{3}, ::ExtraOutput)
 		# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
 		pdiff = (ecef - trans.origin)
 		
@@ -1012,7 +1012,7 @@ begin
 		return uv, r
 	end
 	# Default version without range
-	(trans::UVfromECEF)(ecef::StaticVector{3,<:AbstractFloat}) = trans(ecef,ExtraOutput())[1]
+	(trans::UVfromECEF)(ecef::StaticVector{3}) = trans(ecef,ExtraOutput())[1]
 	
 	# Tuple overload
 	(trans::UVfromECEF)(tup::Tuple{<:Number, <:Number, <:Number}, args...) = trans(SVector(tup),args...)
@@ -1064,7 +1064,7 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation UV LLA
 	
-	function (trans::LLAfromUV)(uv::StaticVector{2,<:AbstractFloat},h::Real=0.0)
+	function (trans::LLAfromUV)(uv::StaticVector{2},h::Real=0.0)
 		ecef = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,h)
 		lla = LLAfromECEF(trans.ellipsoid)(ecef)
 	end
@@ -1278,7 +1278,7 @@ We want to define a SatView mutable struct that represents a satellite and can b
 begin
 	"""
 		SatView(lla::LLA;ellipsoid::Ellipsoid = wgs84_ellipsoid)
-		SatView(ecef::StaticVector{3,<:AbstractFloat};ellipsoid::Ellipsoid = wgs84_ellipsoid)
+		SatView(ecef::StaticVector{3};ellipsoid::Ellipsoid = wgs84_ellipsoid)
 	Object representing the position of a satellite and used to compute various view angles to and from points on ground
 	
 	# Fields
@@ -1325,7 +1325,7 @@ begin
 	"""
 		change_position!(sv::SatView, ecef, lla::LLA, R)
 		change_position!(sv::SatView, lla::LLA)
-		change_position!(sv::SatView, ecef::StaticVector{3,<:AbstractFloat})
+		change_position!(sv::SatView, ecef::StaticVector{3})
 	Change the position of a [`SatView`](@ref) object, if only ecef or lla coordinates are provided, the remaining arguments are computed automatically.
 	
 	Returns the modified [`SatView`](@ref) object
@@ -1421,7 +1421,7 @@ get_range(sv,LLA(0°,5°,10km),ExtraOutput())
 
 # ╔═╡ 150b53c6-b33d-4539-9ee1-202a8feb3ec9
 #=╠═╡ notebook_exclusive
-get_range(SatView(LLA(0,0,600km)),LLA(0,0,0))
+get_range(SatView(LLA(0,0,600km)),(0,0))
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ e8b965c7-a1af-4305-8f6d-ed9940e35b8b
