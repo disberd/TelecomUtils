@@ -4,407 +4,340 @@
 # using Markdown
 # using InteractiveUtils
 
-# ╔═╡ 35da0c45-6d91-4ad9-811f-5d633684208e
+# ╔═╡ 13646410-4e96-11ec-3e3d-99763ba1aeea
 begin
+	using CoordinateTransformations
 	using StaticArrays
 	using LinearAlgebra
 	using Unitful
 	using Unitful.DefaultSymbols
-	using SatelliteToolbox: Ellipsoid
+	using Rotations
+	using Parameters
+	using SatelliteToolbox: geodetic_to_ecef, ecef_to_geodetic, wgs84_ellipsoid
+	using DocStringExtensions
 	using Parameters
 	import Proj4
-	using DocStringExtensions
 end
 
-# ╔═╡ c3a5e97e-00ed-44af-9c67-fa8198900fbd
+# ╔═╡ 73e00cef-9734-439a-b89b-7c1d99aab74e
 #=╠═╡ notebook_exclusive
 begin
-	using PlutoDevMacros
-	using PlutoUtils
+	using BenchmarkTools
 	using PlutoTest
+	using PlutoUtils
+	using PlutoDevMacros
 end
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ e2f50ace-ad14-4e7c-af74-abf3ca9df9fb
+# ╔═╡ 3bda5426-c0de-493f-9514-30b6fe762463
 #=╠═╡ notebook_exclusive
 md"""
 # Packages
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 82c0d6f9-373d-4866-81eb-9cd2d0981310
+# ╔═╡ dcc81988-903b-4707-a70c-09c38682c80f
 #=╠═╡ notebook_exclusive
 ToC()
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 2e6bcf9b-002f-4fbc-80c1-0cfd2ab1d253
+# ╔═╡ 3fd1046c-fabf-4264-9638-ba41301b1804
 #=╠═╡ notebook_exclusive
 md"""
-# Exports
+## load other notebook
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 4c06d21c-ac14-4522-bf25-2e0a1ed2d6b9
+# ╔═╡ 7729ce27-df74-4393-ab70-c4e2864c85f5
+@plutoinclude "satview_transformations.jl" "all"
+
+# ╔═╡ de735c56-612c-4ffd-8335-95f20a129390
+#=╠═╡ notebook_exclusive
+@macroexpand @plutoinclude "satview_transformations.jl" "all"
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 030e15c5-83a8-4a24-836a-96b6f4f0bb04
+#=╠═╡ notebook_exclusive
+md"""
+# SatView
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ b966fa0c-dc52-4821-bc32-e78dd3272ce1
+#=╠═╡ notebook_exclusive
+md"""
+We want to define a SatView mutable struct that represents a satellite and can be used to compute view angles, ranges and ERA for specific points on ground
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ e469d967-79e4-4ef2-b635-51a183cb12e7
 begin
-	export Ellipsoid, SphericalEllipsoid
-	export EarthModel
-	export UnitfulAngleQuantity, UnitfulAngleType
-	export LLA, ERA
+	"""
+	SatView(lla::LLA;ellipsoid::Ellipsoid = wgs84_ellipsoid)
+	SatView(ecef::StaticVector{3};ellipsoid::Ellipsoid = wgs84_ellipsoid)
+Object representing the position of a satellite and used to compute various view angles to and from points on ground
+
+# Fields
+- `ecef::SVector{3,Float64}` → ECEF coordinates of the current satellite positions [m]
+- `lla::LLA` → LLA coordinates of the current satellite position
+- `ellipsoid::Ellipsoid{Float64}` → Reference ellipsoide to be used for the computations, defaults to wgs84
+- `R::RotMatrix3{Float64}` → Rotation matrix to go from the nadir pointing CRS to the ECEF CRS
+
+See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+	"""
+	mutable struct SatView
+		"ECEF coordinates of the current satellite position"
+		ecef::SVector{3,Float64}
+		"LLA coordinates of the current satellite position"
+		lla::LLA
+		"Reference ellipsoid used for the computations"
+		ellipsoid::Ellipsoid{Float64}
+		"Rotation Matrix to go from the nadir-pointing CRS to the ECEF CRS"
+		R::RotMatrix3{Float64}
+	end
+
+	# Custom constructor
+	function SatView(lla::LLA;ellipsoid::Ellipsoid = wgs84_ellipsoid)
+		ecef = ECEFfromLLA(ellipsoid)(lla)
+		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
+		SatView(ecef,lla,ellipsoid,R)
+	end
+	function SatView(ecef::StaticVector{3};ellipsoid::Ellipsoid = wgs84_ellipsoid)
+		lla = LLAfromECEF(ellipsoid)(ecef)
+		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
+		SatView(ecef,lla,ellipsoid,R)
+	end
+	
+	SatView(;ecef = SA_F64[1e7,0,0],lla = LLAfromECEF()(ecef), ellipsoid = wgs84_ellipsoid) = SatView(lla;ellipsoid)
 end
 
-# ╔═╡ 1e3da0c9-2f96-4637-9093-ac7f10c1ad27
+# ╔═╡ 091e4ec2-ea9e-411e-8f39-73aeb73c0214
 #=╠═╡ notebook_exclusive
 md"""
-# Helper Functions
+## Change Position
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 48c73104-fe4c-4543-942a-6f23b0fd2547
-const Point2D = Union{Tuple{Number,Number},StaticVector{2}}
+# ╔═╡ 41370c82-d32a-41ea-a21a-614574292c21
+begin
+	"""
+		change_position!(sv::SatView, ecef, lla::LLA, R)
+		change_position!(sv::SatView, lla::LLA)
+		change_position!(sv::SatView, ecef::StaticVector{3})
+	Change the position of a [`SatView`](@ref) object, if only ecef or lla coordinates are provided, the remaining arguments are computed automatically.
+	
+	Returns the modified [`SatView`](@ref) object
 
-# ╔═╡ c4402f72-67ac-4630-a651-da81c1df71bf
-"""
-	ExtraOutput
-Struct used inside `SatView` to use multiple dispatch to give more than the standard output. 
-See for example [`get_range`](@ref)
-"""
-struct ExtraOutput end
-
-# ╔═╡ e796d5be-e011-45d3-ad90-58769feb5e85
-#=╠═╡ notebook_exclusive
-md"""
-## Show/Print
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ d890aff1-dbd0-451c-bf14-bde9758c3be0
-function _print_angle(io,val,displayname,last=false)
-	print(io,"$displayname=")
-	print(io,round(val;digits=2) * rad)
-	print(io," (")
-	print(io,round(rad2deg(val);digits=2) * °)
-	print(io,")")
-	last || print(io,", ")
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+	"""
+	function change_position!(sv::SatView, ecef, lla::LLA, R)
+		setfield!(sv,:ecef,ecef)
+		setfield!(sv,:lla,lla)
+		setfield!(sv,:R,R)
+		return sv
+	end
+	function change_position!(sv::SatView, lla::LLA)
+		ecef = ECEFfromLLA(sv.ellipsoid)(lla)
+		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
+		change_position!(sv, ecef, lla, R)
+	end
+	function change_position!(sv::SatView, ecef::StaticVector{3})
+		lla = LLAfromECEF(sv.ellipsoid)(ecef)
+		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
+		change_position!(sv, ecef, lla, R)
+	end
 end
 
-# ╔═╡ fdbbc8d9-83d6-413e-aff8-aca18f24dfea
-function _print_length(io,val,displayname,last=false)
-	print(io,"$displayname=")
-	mval = val < 1000 ? round(val;digits=2) * m : round(val/1000;digits=2) * km
-	print(io,mval)
-	last || print(io,", ")
+# ╔═╡ 057cebb0-6ea7-4fff-a94d-b32f87a84b6c
+#=╠═╡ notebook_exclusive
+sv = SatView(;lla=LLA(0,0,100km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 2ace805a-c0c7-4a9b-9349-d86c61df2639
+#=╠═╡ notebook_exclusive
+@benchmark $change_position!($sv,SA_F64[1e7,0,0])
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ bceeabdb-16dd-4534-9b2c-c6c0b3bce588
+#=╠═╡ notebook_exclusive
+@benchmark $change_position!($sv,LLA(0,0,100km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 84769564-8ba8-46f5-b494-b0689d9abd65
+#=╠═╡ notebook_exclusive
+md"""
+## Get Range
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 642f2ede-b154-4260-a959-0a47ca4793b7
+"""
+	get_range(sv::SatView,uv::StaticVector{2,<:Number},h::Real = 0.0)
+	get_range(sv::SatView,uv::Tuple{<:Number,<:Number},h::Real = 0.0)
+Get the range [in m] between the satellite and a given point identified by the uv pointing and the reference altitude above the ellipsoid.
+"""
+function get_range(sv::SatView,uv::StaticVector{2,<:Number},h::Real = 0.0)
+	# Find the ecef coordinate of the target point on earth
+	ecef = ECEFfromUV(sv.ecef, sv.R, sv.ellipsoid)(uv,h)
+	# Return the distance betwteen the satellite and the point
+	return norm(ecef-sv.ecef)
 end
 
-# ╔═╡ cc0cae75-ba10-4a62-b0ef-22259e40a083
-#=╠═╡ notebook_exclusive
-md"""
-## Spherical Ellipsoid
-"""
-  ╠═╡ notebook_exclusive =#
+# ╔═╡ 7a75d351-8583-455f-89c4-2d50cf79ea96
+get_range(sv::SatView,uv::Tuple{<:Number,<:Number},args...) = get_range(sv,SVector(uv),args...)
 
-# ╔═╡ 855553e3-491b-4e8a-a482-95855697e063
+# ╔═╡ 556934d8-d3ee-4a43-8f74-0939c5431c6f
 """
-	SphericalEllipsoid(r = 6371e3)
-Define a spherical ellipsoid of radius `r` to be used for the various transformation in [`SatView`](@ref). Defaults to 6371km radius
+	get_range(sv::SatView,lla::LLA)
+	get_range(sv::SatView,lla::LLA, ::ExtraOutput)
+	get_range(sv::SatView,ecef::StaticVector{3})
+	get_range(sv::SatView,ecef::StaticVector{3}, ::ExtraOutput)
+Get the range [in m] between the satellite and a given point identified either by its LLA or ECEF coordinates. Returns NaN if the point is not visible either because it is covered by the earth surface or it is *above* the satellite.
+
+If called with an instance of the `ExtraOutput` struct as last argument, it also provides the WND coordinates of the target point as seen from the satellite
+
+See also: [`SatView`](@ref), [`change_position!`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
 """
-SphericalEllipsoid(r = 6371e3) = Ellipsoid(r,0.0)
-
-# ╔═╡ 1f7a7093-ce8e-461f-8b91-69266de86748
-#=╠═╡ notebook_exclusive
-md"""
-## geod_geodesic
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ f83fc65f-5f7b-498d-9ed3-0762565ad710
-Proj4.geod_geodesic(e::Ellipsoid) = Proj4.geod_geodesic(e.a, e.f)
-
-# ╔═╡ 4714c6ae-27d9-47db-b12e-126283b10606
-#=╠═╡ notebook_exclusive
-md"""
-# EarthModel
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ f9cc2880-bab1-4be3-b67b-d43508df8d3b
-"""
-$(TYPEDEF)
-Create a geometrical model of the Earth ellipsoid to be used for all the view angles between satellite and points on earth.
-$(TYPEDFIELDS)
-
-This structure is mutable and should be used for all satellites of a given simulation/constellation.
-Changes to any of the fields (via `setproperty!`) will trigger an automatic recomputation of the other field.
-
-See also: [`Ellipsoid`](@ref), [`SphericalEllipsoid`](@ref), [`SatView`](@ref)
-"""
-@with_kw mutable struct EarthModel
-	"Ellipsoid structure, used for the various point of view conversion"
-	ellipsoid::Ellipsoid{Float64}
-	"Extended geod structure, used for the inverse geodesic problem to compute distance and azimuth between points on earth. (Relies on GeographicLib)" 
-	geod::Proj4.geod_geodesic = Proj4.geod_geodesic(ellipsoid)
+function get_range(sv::SatView, ecef::StaticVector{3}, ::ExtraOutput)
+	Δecef = ecef - sv.ecef
+	dist = norm(Δecef)
+	# Find if the target point is below the satellite, we do this by checking the last coordinate of the WND coordinates of the point
+	wnd = sv.R'Δecef
+	wnd[3] < 0 && return NaN, wnd
+	# We have to check that the given lla is visible from the satellite, this happens if either there is no intersection with earth in the direction of pointing, or if the first intersection happens for a range greater than th computed one
+	t₁, t₂ = _intersection_solutions(Δecef/dist, sv.ecef, sv.ellipsoid.a, sv.ellipsoid.b)
+	r = (isnan(t₁) || t₁ > dist-1e-5) ? dist : NaN
+	return r,wnd
 end
 
-# ╔═╡ 1f2b9b74-de46-401d-8a46-0434b9f9aca1
-function Base.setproperty!(value::EarthModel, name::Symbol, x)
-	if name === :ellipsoid
-		setfield!(value, name, x)
-		setfield!(value, :geod, Proj4.geod_geodesic(x))
+# ╔═╡ 68417643-fa77-4780-9890-b0dac95bdb7f
+get_range(sv::SatView, ecef::StaticVector{3}) = get_range(sv,ecef,ExtraOutput())[1]
+
+# ╔═╡ da78f52b-30b6-4faf-bcea-b665c10ff4fe
+get_range(sv::SatView, lla::LLA, args...) = get_range(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...)
+
+# ╔═╡ 449b49de-2951-41fc-ba46-89eaa6c52e79
+#=╠═╡ notebook_exclusive
+get_range(sv,LLA(0°,5°,10km),ExtraOutput())
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ e7443f5b-a1a8-4866-9a64-ce7587465911
+#=╠═╡ notebook_exclusive
+get_range(SatView(LLA(0,0,600km)),(0,0))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 05bac3d0-ad63-4a43-a17f-83cd8a914ff8
+#=╠═╡ notebook_exclusive
+@benchmark $get_range($sv,LLA(0,0,10km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 39a1850b-f64a-4157-8f07-d7a78918fea1
+#=╠═╡ notebook_exclusive
+md"""
+## Get Pointing
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 51987c04-18f5-46bb-a3ba-5f94907a7960
+"""
+	get_pointing(sv::SatView,lla::LLA,kind::Symbol=:uv)
+	get_pointing(sv::SatView,ecef::StaticVector{3},kind::Symbol=:uv)
+Provide the 2-D angular pointing at which the target point (specified as LLA or ECEF) is seen from the satellite.
+
+`kind` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `kind ∈ (:ThetaPhi, :thetaphi, :θφ)`
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+"""
+function get_pointing(sv::SatView,ecef::StaticVector{3},kind::Symbol=:uv)
+	uv = UVfromECEF(sv.ecef,sv.R',sv.ellipsoid)(ecef)
+	if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
+		return ThetaPhifromUV()(uv)
 	else
-		setfield!(value, name, x)
-		setfield!(value, :ellipsoid, Ellipsoid(x.a, x.f))
+		return uv
 	end
 end
 
-# ╔═╡ 6a5cb372-60cb-4ffc-b4f0-22e4016104e7
+# ╔═╡ a6db34bc-b846-49aa-8d57-fb32cdce1684
+get_pointing(sv::SatView,lla::LLA,args...) = get_pointing(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...)
+
+# ╔═╡ 1758748c-fa4b-4414-a05d-a32970c7a94b
+#=╠═╡ notebook_exclusive
+get_pointing(SatView(LLA(0,0,600km)),LLA(1°,1°,0),:thetaphi)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ cc1c1137-a253-49de-8293-5819236a00cf
 #=╠═╡ notebook_exclusive
 md"""
-# Angle Types
+## Get LLA
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ e832c1b7-8c04-4146-90f6-1628e91fea2a
-const UnitfulAngleType = Union{typeof(°),typeof(rad)}
-
-# ╔═╡ 64cf1b8b-6686-4eeb-a3cc-786300ea7c7d
-const UnitfulAngleQuantity = Quantity{<:Real,<:Any,<:UnitfulAngleType}
-
-# ╔═╡ 1d023a0c-a93a-451c-a894-1d1f6a4b78a9
-#=╠═╡ notebook_exclusive
-md"""
-# SatViewCoordinate types
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ b8ce87d4-4768-4e8a-a16e-9e68b00b6617
-abstract type SatViewCoordinate end
-
-# ╔═╡ e3c221c6-6c4a-4b5f-93a6-30d3508ac9d2
-#=╠═╡ notebook_exclusive
-md"""
-## LLA
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 8368ae01-ce53-449e-87dd-8dfa3f29f8f4
-#=╠═╡ notebook_exclusive
-md"""
-Here we want to define a structure that contains useful informations and functions to perform conversions between the view from the satellite based on it's orbital position and points on ground
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ f207d849-ebff-4e6c-95bb-50693cb7c9b6
-begin
-	"""
-	Identify a point on or above earth using geodetic coordinates
-	
-	# Fields
-	- `lat::Float64`: Latitude (`-π/2 <= lat <= π/2`) of the point [rad].
-	- `lon::Float64`: Longitude of the point [rad].
-	- `alt::Float64`: Altitude of the point above the reference earth ellipsoid [m].
-	
-	# Constructors
-		LLA(lat::Real,lon::Real,alt::Real)
-		LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real)
-		LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real)
-		LLA(lat,lon,alt::Unitful.Length)
-		LLA(lat,lon) # Defaults to 0.0 altitude
-	
-	where `UnitfulAngleQuantity` is a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
-	"""
-	@with_kw_noshow struct LLA <: SatViewCoordinate
-		lat::Float64 # Latitude in radians
-		lon::Float64 # Longitude in radians
-		alt::Float64 # Altitude in meters
-		
-		function LLA(lat::Real,lon::Real,alt::Real)
-			(isnan(lat) || isnan(lon) || isnan(alt)) && return new(NaN,NaN,NaN)  
-			l2 = rem2pi(lon,RoundNearest)
-			@assert abs(lat) <= π/2 "Latitude should be between -π/2 and π/2"
-			new(lat,l2,alt)
-		end
+# ╔═╡ 1f7bf45c-b33b-4bfe-b82d-05b908ce375e
+function get_lla(sv::SatView,pointing::Union{StaticVector{2}, Tuple{Number, Number}},kind::Symbol=:uv; h = 0.0)
+	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
+		UVfromThetaPhi()(pointing)
+	else
+		pointing
 	end
-	
-	# Constructor without altitude, assume it is 0
-	LLA(lat,lon) = LLA(lat,lon,0.0)
-	
-	# Define a constructor that takes combinations of real numbers and angles/lengths
-	LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real) = LLA(
-		uconvert(u"rad",lat) |> ustrip,
-		lon,
-		alt)
-	LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real) = LLA(
-		lat,
-		uconvert(u"rad",lon) |> ustrip,
-		alt)
-	LLA(lat,lon,alt::Unitful.Length) = LLA(
-		lat,
-		lon,
-		uconvert(u"m",alt) |> ustrip)	
+	lla = LLAfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv)
 end
 
-# ╔═╡ 3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
-function Base.isapprox(x1::LLA, x2::LLA)
-	x1.alt ≉ x2.alt && return false
-	# Don't care about different longitude if latitude is ±90°
-	abs(x1.lat) ≈ π/2 && abs(x2.lat) ≈ π/2 && return true
-	# Return true if all the lat and lon are matching
-	x1.lat ≈ x2.lat && (x1.lon ≈ x2.lon || abs(x1.lon) ≈ abs(x2.lon) ≈ π) && return true
-	return false
-end
-
-# ╔═╡ 528beffe-0707-4661-8970-def1b1e00ea5
-Base.isnan(lla::LLA) = isnan(lla.lat)
-
-# ╔═╡ f951805e-515a-475f-893f-bb8b968e425c
+# ╔═╡ 1f27b72f-9a3b-4732-a98e-d216af067072
 #=╠═╡ notebook_exclusive
 md"""
-## ERA
+## Get ECEF
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 86ae20a9-e69c-4d63-9119-395449e9ac09
-#=╠═╡ notebook_exclusive
-md"""
-ERA stands for Elevation, Range and Azimuth and is used to express the position of a satellite relative to an observer in spherical coordinates.
-The elevation is the angle of the pointing with respect to the local horizon of the observer, meaning the plane where the observer is located that is perpendicular to the gravity vector acting on the observe (or in an alternative definition, the plane where the observer is located that is parallel to the tangent plane to the earth ellipsoid at the given lat and lon positions of the observer.
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 9be2fd5c-4b6c-4e13-b2aa-fb7120a504b7
-begin
-	"""
-	Elevation, Range and Azimuth for a target point on space as seen from a source point on or above the earth surface
-	
-	# Fields
-	- `el::Float64`: Elevation view angle (`0 <= el <= π/2`) between source and target point [rad].
-	- `r::Float64`: Range (`r >= 0`) between the source and target points [m].
-	- `az::Float64`: Azimuth view angle between source and target point [rad], computed from West to North from the source point perspective. Values provided are automatically converted between -π and π
-	
-	# Constructors
-	
-		ERA(el::Real,r::Real,az::Real)
-		ERA(el::UnitfulAngleQuantity,r::Real,az::Real)
-		ERA(el::UnitfulAngleQuantity,r::Real,az::UnitfulAngleQuantity)
-		ERA(el,r::Unitful.Length,az)
-	
-	where `UnitfulAngleQuantity` is a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
-	"""
-	@with_kw_noshow struct ERA <: SatViewCoordinate
-		el::Float64 # Elevation in radians
-		r::Float64 # Range in meters
-		az::Float64 # Azimuth in radians
-		
-		function ERA(el::Real,r::Real,az::Real)
-			(isnan(el) || isnan(r) || isnan(az)) && return new(NaN,NaN,NaN)  
-			@assert el >= 0 && el <= π/2 "Elevation should be between 0 and π/2"
-			@assert r >= 0 "Range must be positive"
-			new(el,r,rem2pi(az,RoundNearest))
-		end
+# ╔═╡ 948cc7a1-d85e-4cfe-b2e4-e047bcbac305
+function get_ecef(sv::SatView,pointing::Union{StaticVector{2}, Tuple{Number, Number}},kind::Symbol=:uv; h = 0.0)
+	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
+		UVfromThetaPhi()(pointing)
+	else
+		pointing
 	end
-
-	# Define a constructor that takes combinations of real numbers and angles/lengths
-	ERA(el::UnitfulAngleQuantity,r::Real,az::Real) = ERA(
-		uconvert(u"rad",el) |> ustrip,
-		r,
-		az,
-	)
-	ERA(el::UnitfulAngleQuantity,r::Real,az::UnitfulAngleQuantity) = ERA(
-		el,
-		r,
-		uconvert(u"rad",az) |> ustrip,
-	)
-	ERA(el,r::Unitful.Length,az) = ERA(
-		el,
-		uconvert(u"m",r) |> ustrip,
-		az,
-	)
-	
-	# Show
-	function Base.show(io::IO,era::ERA)
-		print(io,"ERA(")
-		_print_angle(io,era.el,"el",false)
-		_print_length(io,era.r,"r",false)
-		_print_angle(io,era.az,"az",true)
-		print(io,")")
-	end
+	lla = ECEFfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv)
 end
 
-# ╔═╡ 16782c72-ecb1-48ec-8510-78e2e0689a10
-function Base.isapprox(x1::ERA, x2::ERA)
-	x1.el ≉ x2.el && return false
-	# Don't care about different azimuth if elevation is 90°
-	x2.el ≉ π/2 && x1.az ≉ x2.az && return false
-	x1.r ≉ x2.r && return false
-	return true
+# ╔═╡ 8bc60d8d-7b54-4dce-a3e4-e336c0b16d4e
+#=╠═╡ notebook_exclusive
+md"""
+## Get ERA
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ b2cb0afd-1220-40bd-8e1b-6df35e3db2f1
+function get_era(sv::SatView, lla::LLA)
+	ERAfromECEF(lla;ellipsoid = sv.ellipsoid)(sv.ecef)
 end
 
-# ╔═╡ 7344190c-7989-4b55-b7be-357f7d6b7370
-Base.isnan(era::ERA) = isnan(era.el)
+# ╔═╡ 8fccb117-2048-4607-8db1-f8df7f5ef156
+function get_era(sv::SatView, ecef::StaticVector{3})
+	ERAfromECEF(ecef;ellipsoid = sv.ellipsoid)(sv.ecef)
+end
 
-# ╔═╡ 11938cb6-46b3-499b-96c0-ef6424d1d0db
+# ╔═╡ ee657a11-c976-4128-8bb4-2336a5ecd319
 #=╠═╡ notebook_exclusive
-md"""
-# Tests
-"""
+# We test that a non-visible point is nan
+@test get_era(SatView(LLA(0,0,600km)),LLA(1°,105°,0)) |> isnan
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ d2c248b1-c48e-437b-a910-edcc59b4424f
+# ╔═╡ 2ad13505-0c60-4ccb-b536-e865c24a0396
 #=╠═╡ notebook_exclusive
-md"""
-## LLA
-"""
+# We test that a non-visible point is nan
+@test get_era(SatView(LLA(0,0,600km)),LLA(0,0,500km)) ≈ ERA(90°, 100km, 0°)
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 7b306ed5-4bda-465d-abf2-4d07cb4642c1
+# ╔═╡ 950fe289-6c98-4cb6-a5af-fb569ca6e25b
 #=╠═╡ notebook_exclusive
-@test $LLA(10°,10°,1000) ≈ $LLA((10+100*eps())*°,10°,1000)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ c45f6aac-bff3-4c98-8bd5-c91a98c9eef7
-#=╠═╡ notebook_exclusive
-@test $LLA(90°,10°,1000) ≈ $LLA(90°,130°,1000)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 1f1505a6-c6af-4fdd-9583-6e783e76de4f
-#=╠═╡ notebook_exclusive
-@test $LLA(40°,-180°,1000) ≈ $LLA(40°,180°,1000)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 980e48bd-9dd1-4195-8086-40785a7f43e1
-#=╠═╡ notebook_exclusive
-@test $LLA(10°,10°,1000) !== $LLA((10+100*eps())*°,10°,1000)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ fc146750-46b2-4084-a6d2-0d91c0e104e6
-#=╠═╡ notebook_exclusive
-LLA(1,1,NaN) |> isnan
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ fc3e96a6-7af8-4ef0-a4ca-b33509aa512f
-#=╠═╡ notebook_exclusive
-md"""
-## ERA
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ ed2f2fa3-be19-4e2d-ad28-36cb053ed6bd
-#=╠═╡ notebook_exclusive
-@test ERA(10°,1000,20°) == ERA(10°,1km,deg2rad(20)*rad)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 6151e4d1-a7a6-4fa7-bc77-0e7f3b2a3cc0
-#=╠═╡ notebook_exclusive
-@test ERA(90°,1000,20°) ≈ ERA(90°,1km,deg2rad(90)*rad)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ b5449c6a-9c43-4f9c-81f7-f01277acb109
-#=╠═╡ notebook_exclusive
-ERA(1,1,NaN) |> isnan
+@benchmark $get_era($sv,LLA(0,0,0))
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
@@ -412,17 +345,21 @@ PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
 PlutoTest = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
 PlutoUtils = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
 Proj4 = "9a7e659c-8ee8-5706-894e-f68f43bc57ea"
+Rotations = "6038ab10-8711-5258-84ad-4b1120ba62dc"
 SatelliteToolbox = "6ac157d9-b43d-51bb-8fab-48bf53814f4a"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
+BenchmarkTools = "~1.2.0"
+CoordinateTransformations = "~0.6.2"
 DocStringExtensions = "~0.8.6"
 Parameters = "~0.12.3"
-PlutoDevMacros = "~0.3.9"
+PlutoDevMacros = "~0.3.10"
 PlutoTest = "~0.2.0"
 PlutoUtils = "~0.4.13"
 Proj4 = "~0.7.6"
+Rotations = "~1.1.0"
 SatelliteToolbox = "~0.9.3"
 StaticArrays = "~1.2.13"
 Unitful = "~1.9.2"
@@ -462,10 +399,22 @@ version = "1.0.1"
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "61adeb0823084487000600ef8b1c00cc2474cd47"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.2.0"
+
 [[deps.CEnum]]
 git-tree-sha1 = "215a9aa4a1f23fbd05b92769fdd62559488d70e9"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 version = "0.4.1"
+
+[[deps.Calculus]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
+uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
+version = "0.5.1"
 
 [[deps.Chain]]
 git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
@@ -477,6 +426,12 @@ deps = ["Compat", "LinearAlgebra", "SparseArrays"]
 git-tree-sha1 = "f885e7e7c124f8c92650d61b9477b9ac2ee607dd"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 version = "1.11.1"
+
+[[deps.ChangesOfVariables]]
+deps = ["LinearAlgebra", "Test"]
+git-tree-sha1 = "9a1d594397670492219635b35a3d830b04730d62"
+uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
+version = "0.1.1"
 
 [[deps.Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
@@ -537,6 +492,12 @@ version = "0.8.6"
 deps = ["ArgTools", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 
+[[deps.DualNumbers]]
+deps = ["Calculus", "NaNMath", "SpecialFunctions"]
+git-tree-sha1 = "fe385ec95ac5533650fb9b1ba7869e9bc28cdd0a"
+uuid = "fa6b7ba4-c1ee-5f82-b5fc-ecf0adba8f74"
+version = "0.6.5"
+
 [[deps.FileIO]]
 deps = ["Pkg", "Requires", "UUIDs"]
 git-tree-sha1 = "2db648b6712831ecb333eae76dbfd1c156ca13bb"
@@ -596,6 +557,17 @@ git-tree-sha1 = "61aa005707ea2cebf47c8d780da8dc9bc4e0c512"
 uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 version = "0.13.4"
 
+[[deps.InverseFunctions]]
+deps = ["Test"]
+git-tree-sha1 = "a7254c0acd8e62f1ac75ad24d5db43f5f19f3c65"
+uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
+version = "0.1.2"
+
+[[deps.IrrationalConstants]]
+git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
+uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
+version = "0.1.1"
+
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
@@ -648,6 +620,12 @@ version = "4.3.0+0"
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
+[[deps.LogExpFunctions]]
+deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
+git-tree-sha1 = "be9eef9f9d78cecb6f262f3c10da151a6c5ab827"
+uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+version = "0.3.5"
+
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
@@ -677,6 +655,11 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 
+[[deps.NaNMath]]
+git-tree-sha1 = "bfe47e760d60b82b66b61d2d44128b62e3a369fb"
+uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
+version = "0.3.5"
+
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 
@@ -689,6 +672,16 @@ version = "1.10.8"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+
+[[deps.OpenLibm_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+
+[[deps.OpenSpecFun_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
+uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
+version = "0.5.5+0"
 
 [[deps.OptionalData]]
 git-tree-sha1 = "d047cc114023e12292533bb822b45c23cb51d310"
@@ -724,9 +717,9 @@ uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
 [[deps.PlutoDevMacros]]
 deps = ["MacroTools", "PlutoHooks"]
-git-tree-sha1 = "6ab70183795e4ad00ecd406f2d05740328c9b905"
+git-tree-sha1 = "7bb2558b40c6176ac5094542f7e01407fc3b38c1"
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.3.9"
+version = "0.3.10"
 
 [[deps.PlutoHooks]]
 deps = ["FileWatching", "InteractiveUtils", "Markdown", "UUIDs"]
@@ -773,11 +766,21 @@ version = "1.2.3"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
 [[deps.Proj4]]
 deps = ["CEnum", "CoordinateTransformations", "PROJ_jll", "StaticArrays"]
 git-tree-sha1 = "5f15f1c647b563e49f655fbbfd4e2ade24bd3c64"
 uuid = "9a7e659c-8ee8-5706-894e-f68f43bc57ea"
 version = "0.7.6"
+
+[[deps.Quaternions]]
+deps = ["DualNumbers", "LinearAlgebra"]
+git-tree-sha1 = "adf644ef95a5e26c8774890a509a55b7791a139f"
+uuid = "94ee1d12-ae83-5a48-8b1c-48b8ff168ae0"
+version = "0.4.2"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -816,6 +819,12 @@ git-tree-sha1 = "4036a3bd08ac7e968e27c203d45f5fff15020621"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.1.3"
 
+[[deps.Rotations]]
+deps = ["LinearAlgebra", "Quaternions", "Random", "StaticArrays", "Statistics"]
+git-tree-sha1 = "dbf5f991130238f10abbf4f2d255fb2837943c43"
+uuid = "6038ab10-8711-5258-84ad-4b1120ba62dc"
+version = "1.1.0"
+
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
@@ -844,6 +853,12 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 [[deps.SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[deps.SpecialFunctions]]
+deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
+git-tree-sha1 = "f0bccf98e16759818ffc5d97ac3ebf87eb950150"
+uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
+version = "1.8.1"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
@@ -932,50 +947,43 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 """
 
 # ╔═╡ Cell order:
-# ╟─e2f50ace-ad14-4e7c-af74-abf3ca9df9fb
-# ╠═35da0c45-6d91-4ad9-811f-5d633684208e
-# ╠═c3a5e97e-00ed-44af-9c67-fa8198900fbd
-# ╠═82c0d6f9-373d-4866-81eb-9cd2d0981310
-# ╟─2e6bcf9b-002f-4fbc-80c1-0cfd2ab1d253
-# ╠═4c06d21c-ac14-4522-bf25-2e0a1ed2d6b9
-# ╟─1e3da0c9-2f96-4637-9093-ac7f10c1ad27
-# ╠═48c73104-fe4c-4543-942a-6f23b0fd2547
-# ╠═c4402f72-67ac-4630-a651-da81c1df71bf
-# ╟─e796d5be-e011-45d3-ad90-58769feb5e85
-# ╠═d890aff1-dbd0-451c-bf14-bde9758c3be0
-# ╠═fdbbc8d9-83d6-413e-aff8-aca18f24dfea
-# ╟─cc0cae75-ba10-4a62-b0ef-22259e40a083
-# ╠═855553e3-491b-4e8a-a482-95855697e063
-# ╟─1f7a7093-ce8e-461f-8b91-69266de86748
-# ╠═f83fc65f-5f7b-498d-9ed3-0762565ad710
-# ╟─4714c6ae-27d9-47db-b12e-126283b10606
-# ╠═f9cc2880-bab1-4be3-b67b-d43508df8d3b
-# ╠═1f2b9b74-de46-401d-8a46-0434b9f9aca1
-# ╟─6a5cb372-60cb-4ffc-b4f0-22e4016104e7
-# ╠═e832c1b7-8c04-4146-90f6-1628e91fea2a
-# ╠═64cf1b8b-6686-4eeb-a3cc-786300ea7c7d
-# ╟─1d023a0c-a93a-451c-a894-1d1f6a4b78a9
-# ╠═b8ce87d4-4768-4e8a-a16e-9e68b00b6617
-# ╟─e3c221c6-6c4a-4b5f-93a6-30d3508ac9d2
-# ╟─8368ae01-ce53-449e-87dd-8dfa3f29f8f4
-# ╠═f207d849-ebff-4e6c-95bb-50693cb7c9b6
-# ╠═3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
-# ╠═528beffe-0707-4661-8970-def1b1e00ea5
-# ╟─f951805e-515a-475f-893f-bb8b968e425c
-# ╟─86ae20a9-e69c-4d63-9119-395449e9ac09
-# ╠═9be2fd5c-4b6c-4e13-b2aa-fb7120a504b7
-# ╠═16782c72-ecb1-48ec-8510-78e2e0689a10
-# ╠═7344190c-7989-4b55-b7be-357f7d6b7370
-# ╟─11938cb6-46b3-499b-96c0-ef6424d1d0db
-# ╟─d2c248b1-c48e-437b-a910-edcc59b4424f
-# ╠═7b306ed5-4bda-465d-abf2-4d07cb4642c1
-# ╠═c45f6aac-bff3-4c98-8bd5-c91a98c9eef7
-# ╠═1f1505a6-c6af-4fdd-9583-6e783e76de4f
-# ╠═980e48bd-9dd1-4195-8086-40785a7f43e1
-# ╠═fc146750-46b2-4084-a6d2-0d91c0e104e6
-# ╟─fc3e96a6-7af8-4ef0-a4ca-b33509aa512f
-# ╠═ed2f2fa3-be19-4e2d-ad28-36cb053ed6bd
-# ╠═6151e4d1-a7a6-4fa7-bc77-0e7f3b2a3cc0
-# ╠═b5449c6a-9c43-4f9c-81f7-f01277acb109
+# ╟─3bda5426-c0de-493f-9514-30b6fe762463
+# ╠═13646410-4e96-11ec-3e3d-99763ba1aeea
+# ╠═73e00cef-9734-439a-b89b-7c1d99aab74e
+# ╠═dcc81988-903b-4707-a70c-09c38682c80f
+# ╟─3fd1046c-fabf-4264-9638-ba41301b1804
+# ╠═7729ce27-df74-4393-ab70-c4e2864c85f5
+# ╠═de735c56-612c-4ffd-8335-95f20a129390
+# ╟─030e15c5-83a8-4a24-836a-96b6f4f0bb04
+# ╟─b966fa0c-dc52-4821-bc32-e78dd3272ce1
+# ╠═e469d967-79e4-4ef2-b635-51a183cb12e7
+# ╟─091e4ec2-ea9e-411e-8f39-73aeb73c0214
+# ╠═41370c82-d32a-41ea-a21a-614574292c21
+# ╠═057cebb0-6ea7-4fff-a94d-b32f87a84b6c
+# ╠═2ace805a-c0c7-4a9b-9349-d86c61df2639
+# ╠═bceeabdb-16dd-4534-9b2c-c6c0b3bce588
+# ╟─84769564-8ba8-46f5-b494-b0689d9abd65
+# ╠═642f2ede-b154-4260-a959-0a47ca4793b7
+# ╠═7a75d351-8583-455f-89c4-2d50cf79ea96
+# ╠═556934d8-d3ee-4a43-8f74-0939c5431c6f
+# ╠═68417643-fa77-4780-9890-b0dac95bdb7f
+# ╠═da78f52b-30b6-4faf-bcea-b665c10ff4fe
+# ╠═449b49de-2951-41fc-ba46-89eaa6c52e79
+# ╠═e7443f5b-a1a8-4866-9a64-ce7587465911
+# ╠═05bac3d0-ad63-4a43-a17f-83cd8a914ff8
+# ╟─39a1850b-f64a-4157-8f07-d7a78918fea1
+# ╠═51987c04-18f5-46bb-a3ba-5f94907a7960
+# ╠═a6db34bc-b846-49aa-8d57-fb32cdce1684
+# ╠═1758748c-fa4b-4414-a05d-a32970c7a94b
+# ╟─cc1c1137-a253-49de-8293-5819236a00cf
+# ╠═1f7bf45c-b33b-4bfe-b82d-05b908ce375e
+# ╟─1f27b72f-9a3b-4732-a98e-d216af067072
+# ╠═948cc7a1-d85e-4cfe-b2e4-e047bcbac305
+# ╟─8bc60d8d-7b54-4dce-a3e4-e336c0b16d4e
+# ╠═b2cb0afd-1220-40bd-8e1b-6df35e3db2f1
+# ╠═8fccb117-2048-4607-8db1-f8df7f5ef156
+# ╠═ee657a11-c976-4128-8bb4-2336a5ecd319
+# ╠═2ad13505-0c60-4ccb-b536-e865c24a0396
+# ╠═950fe289-6c98-4cb6-a5af-fb569ca6e25b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
