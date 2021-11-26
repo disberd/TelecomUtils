@@ -56,6 +56,13 @@ md"""
 @macroexpand @plutoinclude "satview_transformations.jl" "all"
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ a57e3983-21de-4a2e-a227-8265fee6b56b
+#=╠═╡ notebook_exclusive
+md"""
+# Exports
+"""
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ 030e15c5-83a8-4a24-836a-96b6f4f0bb04
 #=╠═╡ notebook_exclusive
 md"""
@@ -73,43 +80,83 @@ We want to define a SatView mutable struct that represents a satellite and can b
 # ╔═╡ e469d967-79e4-4ef2-b635-51a183cb12e7
 begin
 	"""
-	SatView(lla::LLA;ellipsoid::Ellipsoid = wgs84_ellipsoid)
-	SatView(ecef::StaticVector{3};ellipsoid::Ellipsoid = wgs84_ellipsoid)
-Object representing the position of a satellite and used to compute various view angles to and from points on ground
+	SatView(lla::LLA,earthmodel::EarthModel)
+	SatView(ecef::StaticVector{3},earthmodel::EarthModel)
+Object representing the instantaneous position of a satellite and used to compute various view angles to and from points on ground, as well as inverse geodesic computations.
 
 # Fields
-- `ecef::SVector{3,Float64}` → ECEF coordinates of the current satellite positions [m]
-- `lla::LLA` → LLA coordinates of the current satellite position
-- `ellipsoid::Ellipsoid{Float64}` → Reference ellipsoide to be used for the computations, defaults to wgs84
-- `R::RotMatrix3{Float64}` → Rotation matrix to go from the nadir pointing CRS to the ECEF CRS
+$TYPEDFIELDS
 
-See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+If multiple satellites have to be tracked, the `EarthModel` instance `earthmodel` should be generated once and then passed to all the SatView instances to ensure that all the satellites are referring to the same earth model.\\
+Doing so will enforce the same Ellipsoid is shared between all satellites even when it is changed from one of the SatView instances.
+
+See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_distance_on_earth`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
 	"""
 	mutable struct SatView
 		"ECEF coordinates of the current satellite position"
 		ecef::SVector{3,Float64}
 		"LLA coordinates of the current satellite position"
 		lla::LLA
-		"Reference ellipsoid used for the computations"
-		ellipsoid::Ellipsoid{Float64}
+		"Reference EarthModel used for the projections and for the geodesic computations"
+		earthmodel::EarthModel
 		"Rotation Matrix to go from the nadir-pointing CRS to the ECEF CRS"
 		R::RotMatrix3{Float64}
 	end
 
 	# Custom constructor
-	function SatView(lla::LLA;ellipsoid::Ellipsoid = wgs84_ellipsoid)
-		ecef = ECEFfromLLA(ellipsoid)(lla)
+	function SatView(lla::LLA,em::EarthModel)
+		ecef = ECEFfromLLA(em.ellipsoid)(lla)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
-		SatView(ecef,lla,ellipsoid,R)
+		SatView(ecef,lla,em,R)
 	end
-	function SatView(ecef::StaticVector{3};ellipsoid::Ellipsoid = wgs84_ellipsoid)
-		lla = LLAfromECEF(ellipsoid)(ecef)
+	function SatView(ecef::StaticVector{3},em::EarthModel)
+		lla = LLAfromECEF(em.ellipsoid)(ecef)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
-		SatView(ecef,lla,ellipsoid,R)
+		SatView(ecef,lla,em.ellipsoid,R)
 	end
-	
-	SatView(;ecef = SA_F64[1e7,0,0],lla = LLAfromECEF()(ecef), ellipsoid = wgs84_ellipsoid) = SatView(lla;ellipsoid)
 end
+
+# ╔═╡ 4794b9dc-4297-402b-94a2-ed686584bb09
+function Base.getproperty(sv::SatView, name::Symbol)
+	if name ∈ (:ellipsoid, :geod)
+		return getfield(getfield(sv,:earthmodel),name)
+	else
+		return getfield(sv, name)
+	end
+end
+
+# ╔═╡ dd8d119d-550c-4217-923d-43aaf2b8327b
+function Base.setproperty!(sv::SatView, name::Symbol, x)
+	if name ∈ (:ellipsoid, :geod)
+		return setproperty!(getfield(sv,:earthmodel),name, x)
+	else
+		return setfield!(sv, name, x)
+	end
+end
+
+# ╔═╡ 6eb9424e-3dd2-46d4-b4d2-81596bb81668
+#=╠═╡ notebook_exclusive
+em = EarthModel()
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 170f2914-fdf9-46c8-a8e0-9130b046bd60
+#=╠═╡ notebook_exclusive
+sv = SatView(LLA(0,0,100km), em)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ e28cbfc7-408e-49b5-9aeb-bd01c32fba46
+#=╠═╡ notebook_exclusive
+let
+	sv = SatView(LLA(0,0,100km), EarthModel())
+	sv.ellipsoid = wgs84_ellipsoid
+	sv.geod
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5f1fd82d-f441-4a1b-9840-773a8635d3db
+#=╠═╡ notebook_exclusive
+@benchmark getproperty($sv, :geod)
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 091e4ec2-ea9e-411e-8f39-73aeb73c0214
 #=╠═╡ notebook_exclusive
@@ -148,19 +195,19 @@ See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_
 	end
 end
 
-# ╔═╡ 057cebb0-6ea7-4fff-a94d-b32f87a84b6c
+# ╔═╡ f77dcbcd-f042-4f7c-b97f-de63637229d0
 #=╠═╡ notebook_exclusive
-sv = SatView(;lla=LLA(0,0,100km))
+@benchmark change_position!($sv,$(SA_F64[1e7,0,0]))
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 2ace805a-c0c7-4a9b-9349-d86c61df2639
+# ╔═╡ 78a8e7a4-333d-44ca-a438-fd85d7078300
 #=╠═╡ notebook_exclusive
-@benchmark $change_position!($sv,SA_F64[1e7,0,0])
+@code_warntype change_position!(sv,SA_F64[1e7,0,0])
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ bceeabdb-16dd-4534-9b2c-c6c0b3bce588
+# ╔═╡ 709c44c8-c580-4cf7-8376-9c513eb3bd53
 #=╠═╡ notebook_exclusive
-@benchmark $change_position!($sv,LLA(0,0,100km))
+@benchmark change_position!($sv,LLA(0,0,100km))
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 84769564-8ba8-46f5-b494-b0689d9abd65
@@ -196,7 +243,7 @@ Get the range [in m] between the satellite and a given point identified either b
 
 If called with an instance of the `ExtraOutput` struct as last argument, it also provides the WND coordinates of the target point as seen from the satellite
 
-See also: [`SatView`](@ref), [`change_position!`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+See also: [`SatView`](@ref), [`change_position!`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref).
 """
 function get_range(sv::SatView, ecef::StaticVector{3}, ::ExtraOutput)
 	Δecef = ecef - sv.ecef
@@ -223,10 +270,10 @@ get_range(sv,LLA(0°,5°,10km),ExtraOutput())
 
 # ╔═╡ e7443f5b-a1a8-4866-9a64-ce7587465911
 #=╠═╡ notebook_exclusive
-get_range(SatView(LLA(0,0,600km)),(0,0))
+get_range(SatView(LLA(0,0,600km),em),(0,0))
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 05bac3d0-ad63-4a43-a17f-83cd8a914ff8
+# ╔═╡ 7c07a3c1-c1ec-4b83-b7c6-251edf91273c
 #=╠═╡ notebook_exclusive
 @benchmark $get_range($sv,LLA(0,0,10km))
   ╠═╡ notebook_exclusive =#
@@ -246,7 +293,7 @@ Provide the 2-D angular pointing at which the target point (specified as LLA or 
 
 `kind` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `kind ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
-See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_pointing(sv::SatView,ecef::StaticVector{3},kind::Symbol=:uv)
 	uv = UVfromECEF(sv.ecef,sv.R',sv.ellipsoid)(ecef)
@@ -262,7 +309,7 @@ get_pointing(sv::SatView,lla::LLA,args...) = get_pointing(sv,ECEFfromLLA(sv.elli
 
 # ╔═╡ 1758748c-fa4b-4414-a05d-a32970c7a94b
 #=╠═╡ notebook_exclusive
-get_pointing(SatView(LLA(0,0,600km)),LLA(1°,1°,0),:thetaphi)
+get_pointing(SatView(LLA(0,0,600km),em),LLA(1°,1°,0),:thetaphi)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ cc1c1137-a253-49de-8293-5819236a00cf
@@ -273,7 +320,15 @@ md"""
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 1f7bf45c-b33b-4bfe-b82d-05b908ce375e
-function get_lla(sv::SatView,pointing::Union{StaticVector{2}, Tuple{Number, Number}},kind::Symbol=:uv; h = 0.0)
+"""
+	get_lla(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
+Computes the LLA coordinates of a point on earth seen from the satellite identified by `sv`, the angular pointing identified by `pointing` and located at an altitude `h` [m] above the reference Earth ellipsoid of `sv`.
+
+The optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates.
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+"""
+function get_lla(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
 		UVfromThetaPhi()(pointing)
 	else
@@ -290,7 +345,15 @@ md"""
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 948cc7a1-d85e-4cfe-b2e4-e047bcbac305
-function get_ecef(sv::SatView,pointing::Union{StaticVector{2}, Tuple{Number, Number}},kind::Symbol=:uv; h = 0.0)
+"""
+	get_ecef(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
+Computes the ECEF coordinates of a point on earth seen from the satellite identified by `sv`, the angular pointing identified by `pointing` and located at an altitude `h` [m] above the reference Earth ellipsoid of `sv`.
+
+The optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates..
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+"""
+function get_ecef(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
 		UVfromThetaPhi()(pointing)
 	else
@@ -319,18 +382,114 @@ end
 # ╔═╡ ee657a11-c976-4128-8bb4-2336a5ecd319
 #=╠═╡ notebook_exclusive
 # We test that a non-visible point is nan
-@test get_era(SatView(LLA(0,0,600km)),LLA(1°,105°,0)) |> isnan
+@test get_era(SatView(LLA(0,0,600km),em),LLA(1°,105°,0)) |> isnan
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 2ad13505-0c60-4ccb-b536-e865c24a0396
 #=╠═╡ notebook_exclusive
 # We test that a non-visible point is nan
-@test get_era(SatView(LLA(0,0,600km)),LLA(0,0,500km)) ≈ ERA(90°, 100km, 0°)
+@test get_era(SatView(LLA(0,0,600km),em),LLA(0,0,500km)) ≈ ERA(90°, 100km, 0°)
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 950fe289-6c98-4cb6-a5af-fb569ca6e25b
+# ╔═╡ 97c3ab73-5d2b-4871-aaa2-f8d7f1a7204d
 #=╠═╡ notebook_exclusive
-@benchmark $get_era($sv,LLA(0,0,0))
+@benchmark get_era($sv,LLA(0,0,0))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 64370881-a469-4748-97c5-ec27199d529b
+#=╠═╡ notebook_exclusive
+md"""
+## Get Distance on Earth
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 2efb01b8-16b1-4186-94f4-cdfbca1310de
+geod_inverse(sv::SatView, args...) = geod_inverse(sv.geod,args...)
+
+# ╔═╡ e0915eab-a53d-4fb2-9029-83793073ac3c
+"""
+	get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, kind::Symbol=:uv)
+	get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, ::ExtraOutput, kind::Symbol=:uv)
+	get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA)
+	get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA, ::ExtraOutput)
+Computes the distance [m] between the points on the earth surface (`lla1` and `lla2`) using the reference earth model used by `sv`.
+
+If the points are not provided as LLA instances, but as angular directions (`p1` and `p2`), `lla1` and `lla2` as first computed from `p1` and `p2` using the SatView object `sv` as reference.
+
+When called with angular directions, the optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates.
+
+If an instance of `ExtraOutput` is provided as 4th argument, the function also returns the (forward) azimuth angle between `lla1` and `lla2` (2nd output, [deg]) and the azimuth angle between `lla2` and `lla1` (third output, [deg])
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
+"""
+function get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, eo::ExtraOutput, kind::Symbol=:uv)
+	lla1 = get_lla(sv, p1, kind)
+	lla2 = get_lla(sv, p2, kind)
+	get_distance_on_earth(sv, lla1, lla2, eo)
+end
+
+# ╔═╡ 30d32b7a-c95c-4d80-a60a-a87b27b3bf3c
+get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, kind::Symbol=:uv) = get_distance_on_earth(sv, p1, p2, ExtraOutput(), kind)[1]
+
+# ╔═╡ 407101b2-c794-49b0-9f8b-07fb45b80ca9
+get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA, ::ExtraOutput) = geod_inverse(sv.geod, lla1, lla2)
+
+# ╔═╡ af71267d-b5ee-46b7-bf8d-d740033d35e0
+get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA) = geod_inverse(sv.geod, lla1, lla2, ExtraOutput())[1]
+
+# ╔═╡ 2612961b-0e1e-4615-8959-74ab3bc919f9
+#=╠═╡ notebook_exclusive
+md"""
+## Get Nadir Beam Diameter
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 30959832-9eb2-48c5-83d5-776d336c9aa7
+"""
+$SIGNATURES
+Computes the diameter [m] on earth of a beam pointed at nadir from the satellite position identified by `sv` and assuming a 3db beamwidth identified by the scan angle `scan_3db` [deg] at which the beam pattern is 3dB below the peak.
+
+The computation computes the diameter along the `U` direction and takes into account the reference ellipsoid of `sv`, so the resulting diameter is dependent on the satellite lat/lon position
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_distance_on_earth`](@ref). 
+"""
+function get_nadir_beam_diameter(sv, scan_3db)
+	uv_radius = sind(scan_3db)
+	p1 = (uv_radius, 0)
+	p2 = (-uv_radius, 0)
+	get_distance_on_earth(sv, p1, p2)
+end
+
+# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
+export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter
+
+# ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
+#=╠═╡ notebook_exclusive
+get_nadir_beam_diameter(SatView(LLA(50°,0°,735km), EarthModel()), 55)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ c02d0705-6647-4a44-8ae8-fc256f18c4ce
+#=╠═╡ notebook_exclusive
+md"""
+# Tests
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ d15726ab-5a28-4a24-b5ed-b3c8ecb6c581
+#=╠═╡ notebook_exclusive
+md"""
+## nadir beam diameter
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ ae686da9-45d5-4fc2-9cbd-2d828d792407
+#=╠═╡ notebook_exclusive
+@test get_nadir_beam_diameter(SatView(LLA(90°,0°,735km), EarthModel()), 55) ≈ get_nadir_beam_diameter(SatView(LLA(0°,0°,735km), EarthModel()), 55)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 71d3f92e-d143-40dc-8701-37f9053766ef
+#=╠═╡ notebook_exclusive
+@test get_nadir_beam_diameter(SatView(LLA(90°,0°,735km), EarthModel(wgs84_ellipsoid)), 55) ≉ get_nadir_beam_diameter(SatView(LLA(0°,0°,735km), EarthModel(wgs84_ellipsoid)), 55)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -954,14 +1113,22 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─3fd1046c-fabf-4264-9638-ba41301b1804
 # ╠═7729ce27-df74-4393-ab70-c4e2864c85f5
 # ╠═de735c56-612c-4ffd-8335-95f20a129390
+# ╟─a57e3983-21de-4a2e-a227-8265fee6b56b
+# ╠═b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
 # ╟─030e15c5-83a8-4a24-836a-96b6f4f0bb04
 # ╟─b966fa0c-dc52-4821-bc32-e78dd3272ce1
 # ╠═e469d967-79e4-4ef2-b635-51a183cb12e7
+# ╠═4794b9dc-4297-402b-94a2-ed686584bb09
+# ╠═dd8d119d-550c-4217-923d-43aaf2b8327b
+# ╠═6eb9424e-3dd2-46d4-b4d2-81596bb81668
+# ╠═170f2914-fdf9-46c8-a8e0-9130b046bd60
+# ╠═e28cbfc7-408e-49b5-9aeb-bd01c32fba46
+# ╠═5f1fd82d-f441-4a1b-9840-773a8635d3db
 # ╟─091e4ec2-ea9e-411e-8f39-73aeb73c0214
 # ╠═41370c82-d32a-41ea-a21a-614574292c21
-# ╠═057cebb0-6ea7-4fff-a94d-b32f87a84b6c
-# ╠═2ace805a-c0c7-4a9b-9349-d86c61df2639
-# ╠═bceeabdb-16dd-4534-9b2c-c6c0b3bce588
+# ╠═f77dcbcd-f042-4f7c-b97f-de63637229d0
+# ╠═78a8e7a4-333d-44ca-a438-fd85d7078300
+# ╠═709c44c8-c580-4cf7-8376-9c513eb3bd53
 # ╟─84769564-8ba8-46f5-b494-b0689d9abd65
 # ╠═642f2ede-b154-4260-a959-0a47ca4793b7
 # ╠═7a75d351-8583-455f-89c4-2d50cf79ea96
@@ -970,7 +1137,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═da78f52b-30b6-4faf-bcea-b665c10ff4fe
 # ╠═449b49de-2951-41fc-ba46-89eaa6c52e79
 # ╠═e7443f5b-a1a8-4866-9a64-ce7587465911
-# ╠═05bac3d0-ad63-4a43-a17f-83cd8a914ff8
+# ╠═7c07a3c1-c1ec-4b83-b7c6-251edf91273c
 # ╟─39a1850b-f64a-4157-8f07-d7a78918fea1
 # ╠═51987c04-18f5-46bb-a3ba-5f94907a7960
 # ╠═a6db34bc-b846-49aa-8d57-fb32cdce1684
@@ -984,6 +1151,19 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═8fccb117-2048-4607-8db1-f8df7f5ef156
 # ╠═ee657a11-c976-4128-8bb4-2336a5ecd319
 # ╠═2ad13505-0c60-4ccb-b536-e865c24a0396
-# ╠═950fe289-6c98-4cb6-a5af-fb569ca6e25b
+# ╠═97c3ab73-5d2b-4871-aaa2-f8d7f1a7204d
+# ╟─64370881-a469-4748-97c5-ec27199d529b
+# ╠═2efb01b8-16b1-4186-94f4-cdfbca1310de
+# ╠═e0915eab-a53d-4fb2-9029-83793073ac3c
+# ╠═30d32b7a-c95c-4d80-a60a-a87b27b3bf3c
+# ╠═407101b2-c794-49b0-9f8b-07fb45b80ca9
+# ╠═af71267d-b5ee-46b7-bf8d-d740033d35e0
+# ╟─2612961b-0e1e-4615-8959-74ab3bc919f9
+# ╠═30959832-9eb2-48c5-83d5-776d336c9aa7
+# ╠═4af7a092-8f42-4aef-9c09-feab8ebc1d87
+# ╟─c02d0705-6647-4a44-8ae8-fc256f18c4ce
+# ╟─d15726ab-5a28-4a24-b5ed-b3c8ecb6c581
+# ╠═ae686da9-45d5-4fc2-9cbd-2d828d792407
+# ╠═71d3f92e-d143-40dc-8701-37f9053766ef
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
