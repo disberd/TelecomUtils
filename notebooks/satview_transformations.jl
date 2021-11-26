@@ -36,6 +36,13 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ f41cdadb-808d-4714-983a-b871151ff32f
+#=╠═╡ notebook_exclusive
+md"""
+# Exports
+"""
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ 059edd4a-b3b7-4db2-9ecd-ca8a36021d2e
 #=╠═╡ notebook_exclusive
 ToC()
@@ -56,16 +63,6 @@ md"""
 # ╔═╡ f41cdadb-808d-4714-983a-b871151ff1c0
 @plutoinclude "satview_basics.jl" "all"
 
-# ╔═╡ f41cdadb-808d-4714-983a-b871151ff32f
-#=╠═╡ notebook_exclusive
-md"""
-# Exports
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
-export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
-
 # ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de552d
 #=╠═╡ notebook_exclusive
 md"""
@@ -80,10 +77,6 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 00d31f8c-dd75-4d8f-83b6-d8e976b040d0
-# Generic definition, the @inline here was necessary to avoid allocations, see https://discourse.julialang.org/t/dispatch-on-value-allocating/26337/11
-@inline _rotation_matrix(s::Symbol,lat,lon)::RotMatrix3{Float64} = _rotation_matrix(Val(s),lat,lon)
-
 # ╔═╡ 3cc3b232-01e8-4064-8a2a-abe14aa6e5c0
 #=╠═╡ notebook_exclusive
 md"""
@@ -91,27 +84,9 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ f91fbe7d-137f-4e05-a7c7-0486db54e39e
-begin
-	"""
-	_rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
-	
-	Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
-	"""
-@inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)::RotMatrix3{Float64}
-		# Precompute the sines and cosines
-		sλ, cλ = sincos(lat)
-		sφ, cφ = sincos(lon)
-		
-		# Generate the rotation matrix as a StaticArray
-		return SA_F64[
-			-sλ      cλ      0
-			-sφ*cλ  -sφ*sλ   cφ
-			 cφ*cλ   cφ*sλ   sφ
-			] |> RotMatrix
-	end
-	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
-end
+# ╔═╡ 00d31f8c-dd75-4d8f-83b6-d8e976b040d0
+# Generic definition, the @inline here was necessary to avoid allocations, see https://discourse.julialang.org/t/dispatch-on-value-allocating/26337/11
+@inline _rotation_matrix(s::Symbol,lat,lon)::RotMatrix3{Float64} = _rotation_matrix(Val(s),lat,lon)
 
 # ╔═╡ 46730818-1bb8-4c79-8b6f-f8cf0188c918
 #=╠═╡ notebook_exclusive
@@ -119,24 +94,6 @@ md"""
 ### Satellite-Centric
 """
   ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 17d1271f-713d-4a85-b6ef-43e2632b74cf
-begin
-	# Define the relevant rotation matrix
-		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)::RotMatrix3{Float64}
-		# Precompute the sines and cosines
-		sλ, cλ = sincos(lat)
-		sφ, cφ = sincos(lon)
-		
-		# Generate the rotation matrix as a StaticArray
-		return SA_F64[
-			 sφ -sλ*cφ -cλ*cφ
-			-cφ -sλ*sφ -cλ*sφ
-			 0   cλ    -sλ
-			] |> RotMatrix
-	end
-	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
-end
 
 # ╔═╡ 965e7534-cc27-4657-b3cf-5a5b36be2a9c
 #=╠═╡ notebook_exclusive
@@ -360,6 +317,46 @@ function (::UVfromThetaPhi)(θφ::StaticVector{2,T}) where T
 end
 end
 
+# ╔═╡ f91fbe7d-137f-4e05-a7c7-0486db54e39e
+begin
+	"""
+	_rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
+	
+	Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
+	"""
+@inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)::RotMatrix3{Float64}
+		# Precompute the sines and cosines
+		sλ, cλ = sincos(lat)
+		sφ, cφ = sincos(lon)
+		
+		# Generate the rotation matrix as a StaticArray
+		return SA_F64[
+			-sλ      cλ      0
+			-sφ*cλ  -sφ*sλ   cφ
+			 cφ*cλ   cφ*sλ   sφ
+			] |> RotMatrix
+	end
+	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
+end
+
+# ╔═╡ 17d1271f-713d-4a85-b6ef-43e2632b74cf
+begin
+	# Define the relevant rotation matrix
+		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)::RotMatrix3{Float64}
+		# Precompute the sines and cosines
+		sλ, cλ = sincos(lat)
+		sφ, cφ = sincos(lon)
+		
+		# Generate the rotation matrix as a StaticArray
+		return SA_F64[
+			 sφ -sλ*cφ -cλ*cφ
+			-cφ -sλ*sφ -cλ*sφ
+			 0   cλ    -sλ
+			] |> RotMatrix
+	end
+	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
+end
+
 # ╔═╡ ee3aa19f-317e-46f6-8da2-4792a84b7839
 #=╠═╡ notebook_exclusive
 md"""
@@ -404,6 +401,19 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ 51a0cfb6-64a8-450a-b6e5-79f3de6c5725
+begin
+	# Define the transformations structs and constructors
+	@user_transformation ECEF ENU
+	
+	function (trans::ECEFfromENU)(enu::StaticVector{3})
+		ecef = trans.R * enu + trans.origin
+	end
+	function (trans::ENUfromECEF)(ecef::StaticVector{3})
+		enu = trans.R * (ecef - trans.origin)
+	end
+end
+
 # ╔═╡ 2b32d7e7-1519-4fe9-bfa8-d3c6a57b237f
 #=╠═╡ notebook_exclusive
 md"""
@@ -419,6 +429,17 @@ The transformations defined here allow going from the ECEF coordinates of a sate
 The satellite position is expected in ECEF because the altitude of a satellite in orbit above the reference ellipsoid changes with latitude (if the ellipsoid is not a sphere), so by forcing the user to provide ECEF coordinates one has to think about the transformation and there is less risk of putting the same reference orbit altitude regardless of the latitude
 """
   ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 0bff095f-534e-4342-82c2-931f75e16c18
+begin
+	@user_transformation ECEF ERA
+	function (trans::ECEFfromERA)(era::ERA)
+		ecef = trans.R * ENUfromERA()(era) + trans.origin
+	end
+	function (trans::ERAfromECEF)(ecef::StaticVector{3})
+		era = ERAfromENU()(trans.R * (ecef - trans.origin))
+	end
+end
 
 # ╔═╡ 97e3be69-b480-482b-a1aa-5bf2ede10cbe
 #=╠═╡ notebook_exclusive
@@ -515,53 +536,6 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ ea890a0d-b696-4131-87ea-202ee8199358
-#=╠═╡ notebook_exclusive
-md"""
-### ECEF <-> UV
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ f5b5c788-ad21-478d-972f-5bc2d7fd2768
-#=╠═╡ notebook_exclusive
-md"""
-### LLA <-> UV
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 4908872b-0894-454e-afed-0efdc0c3a84f
-#=╠═╡ notebook_exclusive
-md"""
-We define here the transformations to switch between the satellite point of view in UV and the geodesic coordinates (LLA) of points on or above earth.
-The computation is performed accounting for a custom ellipsoid shape of the earth (defaults to the WGS84 one) and an optional target height (above the reference ellipsoid) can be provided when going from UV to LLA.
-This target height is used to find the correct geodesic coordinate lat,long when extending the satellite view direction to find the intersection (the same pointing direction results in different lat,long values depending on the target height).
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 51a0cfb6-64a8-450a-b6e5-79f3de6c5725
-begin
-	# Define the transformations structs and constructors
-	@user_transformation ECEF ENU
-	
-	function (trans::ECEFfromENU)(enu::StaticVector{3})
-		ecef = trans.R * enu + trans.origin
-	end
-	function (trans::ENUfromECEF)(ecef::StaticVector{3})
-		enu = trans.R * (ecef - trans.origin)
-	end
-end
-
-# ╔═╡ 0bff095f-534e-4342-82c2-931f75e16c18
-begin
-	@user_transformation ECEF ERA
-	function (trans::ECEFfromERA)(era::ERA)
-		ecef = trans.R * ENUfromERA()(era) + trans.origin
-	end
-	function (trans::ERAfromECEF)(ecef::StaticVector{3})
-		era = ERAfromENU()(trans.R * (ecef - trans.origin))
-	end
-end
-
 # ╔═╡ f634d5d0-bb61-4bd6-9b1c-df75399de739
 begin
 	# Define the transformations structs and constructors
@@ -586,57 +560,12 @@ end
 WNDfromECEF(LLA(0°,180°,600km))((1e7,0,0))
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
+# ╔═╡ ea890a0d-b696-4131-87ea-202ee8199358
 #=╠═╡ notebook_exclusive
 md"""
-# Tests
+### ECEF <-> UV
 """
   ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 4e0ecf07-e70f-4c3b-9af1-71c35167e7a8
-#=╠═╡ notebook_exclusive
-md"""
-## ECEF <-> LLA
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ e7a82a42-9852-4ac3-8612-938004bf24de
-#=╠═╡ notebook_exclusive
-@test ECEFfromLLA()(LLA(30°,45°,100km)) |> LLAfromECEF() ≈ LLA(30°,45°,100km)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 89eb0e56-e1d5-4497-8de2-3eed528f6358
-#=╠═╡ notebook_exclusive
-@benchmark $ECEFfromLLA()($LLA(10°,10°,1000km))
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 61ace485-dc58-42dd-a58f-1cd13e1f6444
-#=╠═╡ notebook_exclusive
-@benchmark $LLAfromECEF()(SA_F64[1e7,1e6,1e6])
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ d569a837-f315-47d4-9624-1bafe9996493
-begin
-	# Define the transformations structs and constructors
-	@sat_transformation UV LLA
-	
-	function (trans::LLAfromUV)(uv::StaticVector{2},h::Real=0.0)
-		ecef = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,h)
-		lla = LLAfromECEF(trans.ellipsoid)(ecef)
-	end
-	# Tuple overload
-	(trans::LLAfromUV)(tup::Tuple{<:Number, <:Number},h::Real=0.0) = trans(SVector(tup),h)
-	
-	function (trans::UVfromLLA)(lla::LLA, ex::ExtraOutput)
-		ecef = ECEFfromLLA(trans.ellipsoid)(lla)
-		uv, wnd = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
-	end
-	# Single output method
-	(trans::UVfromLLA)(lla::LLA) = trans(lla,ExtraOutput())[1]
-	
-	# Tuple overload
-	(trans::UVfromLLA)(tup::Tuple{<:Number, <:Number, <:Number},args...) = trans(LLA(tup...),args...)
-end
 
 # ╔═╡ a8761c85-73d2-457c-816f-7db2c83d01e9
 begin
@@ -693,6 +622,77 @@ begin
 	# Tuple overload
 	(trans::UVfromECEF)(tup::Tuple{<:Number, <:Number, <:Number}, args...) = trans(SVector(tup),args...)
 end
+
+# ╔═╡ f5b5c788-ad21-478d-972f-5bc2d7fd2768
+#=╠═╡ notebook_exclusive
+md"""
+### LLA <-> UV
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 4908872b-0894-454e-afed-0efdc0c3a84f
+#=╠═╡ notebook_exclusive
+md"""
+We define here the transformations to switch between the satellite point of view in UV and the geodesic coordinates (LLA) of points on or above earth.
+The computation is performed accounting for a custom ellipsoid shape of the earth (defaults to the WGS84 one) and an optional target height (above the reference ellipsoid) can be provided when going from UV to LLA.
+This target height is used to find the correct geodesic coordinate lat,long when extending the satellite view direction to find the intersection (the same pointing direction results in different lat,long values depending on the target height).
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ d569a837-f315-47d4-9624-1bafe9996493
+begin
+	# Define the transformations structs and constructors
+	@sat_transformation UV LLA
+	
+	function (trans::LLAfromUV)(uv::StaticVector{2},h::Real=0.0)
+		ecef = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,h)
+		lla = LLAfromECEF(trans.ellipsoid)(ecef)
+	end
+	# Tuple overload
+	(trans::LLAfromUV)(tup::Tuple{<:Number, <:Number},h::Real=0.0) = trans(SVector(tup),h)
+	
+	function (trans::UVfromLLA)(lla::LLA, ex::ExtraOutput)
+		ecef = ECEFfromLLA(trans.ellipsoid)(lla)
+		uv, wnd = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
+	end
+	# Single output method
+	(trans::UVfromLLA)(lla::LLA) = trans(lla,ExtraOutput())[1]
+	
+	# Tuple overload
+	(trans::UVfromLLA)(tup::Tuple{<:Number, <:Number, <:Number},args...) = trans(LLA(tup...),args...)
+end
+
+# ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
+export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
+
+# ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
+#=╠═╡ notebook_exclusive
+md"""
+# Tests
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 4e0ecf07-e70f-4c3b-9af1-71c35167e7a8
+#=╠═╡ notebook_exclusive
+md"""
+## ECEF <-> LLA
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ e7a82a42-9852-4ac3-8612-938004bf24de
+#=╠═╡ notebook_exclusive
+@test ECEFfromLLA()(LLA(30°,45°,100km)) |> LLAfromECEF() ≈ LLA(30°,45°,100km)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 89eb0e56-e1d5-4497-8de2-3eed528f6358
+#=╠═╡ notebook_exclusive
+@benchmark $ECEFfromLLA()($LLA(10°,10°,1000km))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 61ace485-dc58-42dd-a58f-1cd13e1f6444
+#=╠═╡ notebook_exclusive
+@benchmark $LLAfromECEF()(SA_F64[1e7,1e6,1e6])
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1311,7 +1311,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─d852d113-2be1-4580-92dd-bf4082d0df11
 # ╠═36f00194-59ac-4e1a-a746-f41c9057e972
 # ╠═f43c934c-84c8-4c3d-b4d9-2b716753d89c
-# ╠═f41cdadb-808d-4714-983a-b871151ff32f
+# ╟─f41cdadb-808d-4714-983a-b871151ff32f
 # ╠═f5577c80-ffdd-44ae-bc05-2baed9de1234
 # ╠═059edd4a-b3b7-4db2-9ecd-ca8a36021d2e
 # ╠═e43a64ba-d776-42dd-97be-2be24a2769a7

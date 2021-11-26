@@ -44,16 +44,6 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 4c06d21c-ac14-4522-bf25-2e0a1ed2d6b9
-begin
-	export Ellipsoid, SphericalEllipsoid
-	export EarthModel
-	export UnitfulAngleQuantity, UnitfulAngleType, °
-	export km
-	export LLA, ERA
-	export geod_inverse
-end
-
 # ╔═╡ 1e3da0c9-2f96-4637-9093-ac7f10c1ad27
 #=╠═╡ notebook_exclusive
 md"""
@@ -199,79 +189,6 @@ Here we want to define a structure that contains useful informations and functio
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ f207d849-ebff-4e6c-95bb-50693cb7c9b6
-begin
-	"""
-	Identify a point on or above earth using geodetic coordinates
-	
-	# Fields
-	- `lat::Float64`: Latitude (`-π/2 <= lat <= π/2`) of the point [rad].
-	- `lon::Float64`: Longitude of the point [rad].
-	- `alt::Float64`: Altitude of the point above the reference earth ellipsoid [m].
-	
-	# Constructors
-		LLA(lat::Real,lon::Real,alt::Real)
-		LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real)
-		LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real)
-		LLA(lat,lon,alt::Unitful.Length)
-		LLA(lat,lon) # Defaults to 0.0 altitude
-	
-	where `UnitfulAngleQuantity` is a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
-	"""
-	@with_kw_noshow struct LLA <: SatViewCoordinate
-		lat::Float64 # Latitude in radians
-		lon::Float64 # Longitude in radians
-		alt::Float64 # Altitude in meters
-		
-		function LLA(lat::Real,lon::Real,alt::Real)
-			(isnan(lat) || isnan(lon) || isnan(alt)) && return new(NaN,NaN,NaN)  
-			l2 = rem2pi(lon,RoundNearest)
-			@assert abs(lat) <= π/2 "Latitude should be between -π/2 and π/2"
-			new(lat,l2,alt)
-		end
-	end
-	
-	# Constructor without altitude, assume it is 0
-	LLA(lat,lon) = LLA(lat,lon,0.0)
-	
-	# Define a constructor that takes combinations of real numbers and angles/lengths
-	LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real) = LLA(
-		uconvert(u"rad",lat) |> ustrip,
-		lon,
-		alt)
-	LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real) = LLA(
-		lat,
-		uconvert(u"rad",lon) |> ustrip,
-		alt)
-	LLA(lat,lon,alt::Unitful.Length) = LLA(
-		lat,
-		lon,
-		uconvert(u"m",alt) |> ustrip)	
-end
-
-# ╔═╡ 3033d5c1-d8e0-4d46-0001-7dec4ff7afbd
-# Show method for LLA
-function Base.show(io::IO,lla::LLA)
-	print(io,"LLA(")
-	_print_angle(io,lla.lat,"lat",false)
-	_print_angle(io,lla.lon,"lon",false)
-	_print_length(io,lla.alt,"alt",true)
-	print(io,")")
-end
-
-# ╔═╡ 3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
-function Base.isapprox(x1::LLA, x2::LLA)
-	x1.alt ≉ x2.alt && return false
-	# Don't care about different longitude if latitude is ±90°
-	abs(x1.lat) ≈ π/2 && abs(x2.lat) ≈ π/2 && return true
-	# Return true if all the lat and lon are matching
-	x1.lat ≈ x2.lat && (x1.lon ≈ x2.lon || abs(x1.lon) ≈ abs(x2.lon) ≈ π) && return true
-	return false
-end
-
-# ╔═╡ 528beffe-0707-4661-8970-def1b1e00ea5
-Base.isnan(lla::LLA) = isnan(lla.lat)
-
 # ╔═╡ f951805e-515a-475f-893f-bb8b968e425c
 #=╠═╡ notebook_exclusive
 md"""
@@ -358,6 +275,79 @@ end
 # ╔═╡ 7344190c-7989-4b55-b7be-357f7d6b7370
 Base.isnan(era::ERA) = isnan(era.el)
 
+# ╔═╡ f207d849-ebff-4e6c-95bb-50693cb7c9b6
+begin
+	"""
+	Identify a point on or above earth using geodetic coordinates
+	
+	# Fields
+	- `lat::Float64`: Latitude (`-π/2 <= lat <= π/2`) of the point [rad].
+	- `lon::Float64`: Longitude of the point [rad].
+	- `alt::Float64`: Altitude of the point above the reference earth ellipsoid [m].
+	
+	# Constructors
+		LLA(lat::Real,lon::Real,alt::Real)
+		LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real)
+		LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real)
+		LLA(lat,lon,alt::Unitful.Length)
+		LLA(lat,lon) # Defaults to 0.0 altitude
+	
+	where `UnitfulAngleQuantity` is a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
+	"""
+	@with_kw_noshow struct LLA <: SatViewCoordinate
+		lat::Float64 # Latitude in radians
+		lon::Float64 # Longitude in radians
+		alt::Float64 # Altitude in meters
+		
+		function LLA(lat::Real,lon::Real,alt::Real)
+			(isnan(lat) || isnan(lon) || isnan(alt)) && return new(NaN,NaN,NaN)  
+			l2 = rem2pi(lon,RoundNearest)
+			@assert abs(lat) <= π/2 "Latitude should be between -π/2 and π/2"
+			new(lat,l2,alt)
+		end
+	end
+	
+	# Constructor without altitude, assume it is 0
+	LLA(lat,lon) = LLA(lat,lon,0.0)
+	
+	# Define a constructor that takes combinations of real numbers and angles/lengths
+	LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real) = LLA(
+		uconvert(u"rad",lat) |> ustrip,
+		lon,
+		alt)
+	LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real) = LLA(
+		lat,
+		uconvert(u"rad",lon) |> ustrip,
+		alt)
+	LLA(lat,lon,alt::Unitful.Length) = LLA(
+		lat,
+		lon,
+		uconvert(u"m",alt) |> ustrip)	
+end
+
+# ╔═╡ 3033d5c1-d8e0-4d46-0001-7dec4ff7afbd
+# Show method for LLA
+function Base.show(io::IO,lla::LLA)
+	print(io,"LLA(")
+	_print_angle(io,lla.lat,"lat",false)
+	_print_angle(io,lla.lon,"lon",false)
+	_print_length(io,lla.alt,"alt",true)
+	print(io,")")
+end
+
+# ╔═╡ 3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
+function Base.isapprox(x1::LLA, x2::LLA)
+	x1.alt ≉ x2.alt && return false
+	# Don't care about different longitude if latitude is ±90°
+	abs(x1.lat) ≈ π/2 && abs(x2.lat) ≈ π/2 && return true
+	# Return true if all the lat and lon are matching
+	x1.lat ≈ x2.lat && (x1.lon ≈ x2.lon || abs(x1.lon) ≈ abs(x2.lon) ≈ π) && return true
+	return false
+end
+
+# ╔═╡ 528beffe-0707-4661-8970-def1b1e00ea5
+Base.isnan(lla::LLA) = isnan(lla.lat)
+
 # ╔═╡ 11938cb6-46b3-0001-96c0-ef6424d1d0db
 #=╠═╡ notebook_exclusive
 md"""
@@ -405,6 +395,16 @@ function geod_inverse(geod::Proj4.geod_geodesic, lla1::LLA, lla2::LLA)
 	geod_inverse(geod,lonlat1,lonlat2)
 end
 
+# ╔═╡ 4c06d21c-ac14-4522-bf25-2e0a1ed2d6b9
+begin
+	export Ellipsoid, SphericalEllipsoid
+	export EarthModel
+	export UnitfulAngleQuantity, UnitfulAngleType, °
+	export km
+	export LLA, ERA
+	export geod_inverse
+end
+
 # ╔═╡ 11938cb6-46b3-499b-96c0-ef6424d1d0db
 #=╠═╡ notebook_exclusive
 md"""
@@ -421,22 +421,22 @@ md"""
 
 # ╔═╡ 7b306ed5-4bda-465d-abf2-4d07cb4642c1
 #=╠═╡ notebook_exclusive
-@test $LLA(10°,10°,1000) ≈ $LLA((10+100*eps())*°,10°,1000)
+@test LLA(10°,10°,1000) ≈ LLA((10+100*eps())*°,10°,1000)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ c45f6aac-bff3-4c98-8bd5-c91a98c9eef7
 #=╠═╡ notebook_exclusive
-@test $LLA(90°,10°,1000) ≈ $LLA(90°,130°,1000)
+@test LLA(90°,10°,1000) ≈ LLA(90°,130°,1000)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 1f1505a6-c6af-4fdd-9583-6e783e76de4f
 #=╠═╡ notebook_exclusive
-@test $LLA(40°,-180°,1000) ≈ $LLA(40°,180°,1000)
+@test LLA(40°,-180°,1000) ≈ LLA(40°,180°,1000)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 980e48bd-9dd1-4195-8086-40785a7f43e1
 #=╠═╡ notebook_exclusive
-@test $LLA(10°,10°,1000) !== $LLA((10+100*eps())*°,10°,1000)
+@test LLA(10°,10°,1000) !== LLA((10+100*eps())*°,10°,1000)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ fc146750-46b2-4084-a6d2-0d91c0e104e6
