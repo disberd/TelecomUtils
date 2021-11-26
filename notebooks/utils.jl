@@ -8,6 +8,7 @@
 begin
 	using DocStringExtensions
 	using StaticArrays
+	using LinearAlgebra
 end
 
 # ╔═╡ c0a30957-4c7b-4d7b-bfa9-c2fb691a077b
@@ -208,6 +209,10 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ 3f2a31d4-0fa8-40fa-9dc4-bd6a26d2ddc9
+# Initialize the vector that contains the matrix to compute the beam coloring. We limit ourselves at 500 colors to start
+const F_reuse_matrix = (square = SMatrix{2,2,Float64,4}[], triangular = SMatrix{2,2,Float64,4}[])
+
 # ╔═╡ 6b9beb62-dc7e-4b8b-9b7c-8fee5b1da98f
 function _coloring_inner_bruteforce!(T_mat, rot_mat, grid_max)
     max_colours = length(T_mat)
@@ -381,11 +386,41 @@ begin
 	export f2λ, λ2f, db2lin, lin2db
 end
 
+# ╔═╡ 8160086a-6349-447c-87ae-880b02fa97f5
+#=╠═╡ notebook_exclusive
+md"""
+# Tests
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 3ea0415c-af14-430c-bf7c-2c7d71b7a333
+#=╠═╡ notebook_exclusive
+let
+	N_colors = 6
+	lat = generate_hex_lattice(1; M = 10)
+	colors = generate_colors(lat,N_colors)	
+	data = scatter(lat;mode="markers", marker_color = colors)
+	Plot(data)
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 65b74f4a-e2af-4caf-8719-5a59c6349bb9
+#=╠═╡ notebook_exclusive
+let
+	N_colors = 4
+	lat = generate_square_lattice(1; M = 10)
+	colors = generate_colors(lat,N_colors; lattice_type = :square)	
+	data = scatter(lat;mode="markers", marker_color = colors)
+	Plot(data)
+end
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 PlutoUtils = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
@@ -789,9 +824,13 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═b2e80c33-bbfe-43ca-8795-c9d8d6fa52a9
 # ╠═9165c4d4-69b5-456c-813c-4725feeb5b52
 # ╟─a5ca5a8a-8497-41e2-9af0-92db5db9ce73
+# ╠═3f2a31d4-0fa8-40fa-9dc4-bd6a26d2ddc9
 # ╠═14cb2a0b-2ea8-471b-987f-1647f1516992
 # ╠═6b9beb62-dc7e-4b8b-9b7c-8fee5b1da98f
 # ╠═1d44cf1c-11a5-4366-94f3-85b695c6ca12
 # ╠═7e68054e-4268-424e-b413-ef18baf832ac
+# ╟─8160086a-6349-447c-87ae-880b02fa97f5
+# ╠═3ea0415c-af14-430c-bf7c-2c7d71b7a333
+# ╠═65b74f4a-e2af-4caf-8719-5a59c6349bb9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
