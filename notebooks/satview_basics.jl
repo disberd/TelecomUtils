@@ -48,8 +48,10 @@ md"""
 begin
 	export Ellipsoid, SphericalEllipsoid
 	export EarthModel
-	export UnitfulAngleQuantity, UnitfulAngleType
+	export UnitfulAngleQuantity, UnitfulAngleType, °
+	export km
 	export LLA, ERA
+	export geod_inverse
 end
 
 # ╔═╡ 1e3da0c9-2f96-4637-9093-ac7f10c1ad27
@@ -127,21 +129,26 @@ md"""
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ f9cc2880-bab1-4be3-b67b-d43508df8d3b
+begin
 """
 $(TYPEDEF)
-Create a geometrical model of the Earth ellipsoid to be used for all the view angles between satellite and points on earth.
+Geometrical model of the Earth ellipsoid to be used for all the view angles between satellite and points on earth.
+# Fields
 $(TYPEDFIELDS)
 
-This structure is mutable and should be used for all satellites of a given simulation/constellation.
-Changes to any of the fields (via `setproperty!`) will trigger an automatic recomputation of the other field.
+A single instance of this structure should be used for all satellites of a given simulation/constellation.\\
+Changes to any of the two fields (via `setproperty!`) will trigger an automatic recomputation of the other field.\\
+When called without arguments, it defaults to a spherical earth with a radius of 6371 km.
 
 See also: [`Ellipsoid`](@ref), [`SphericalEllipsoid`](@ref), [`SatView`](@ref)
 """
 @with_kw mutable struct EarthModel
-	"Ellipsoid structure, used for the various point of view conversion"
-	ellipsoid::Ellipsoid{Float64}
-	"Extended geod structure, used for the inverse geodesic problem to compute distance and azimuth between points on earth. (Relies on GeographicLib)" 
+	"Ellipsoid structure, used for the various point of view conversion."
+	ellipsoid::Ellipsoid{Float64} = SphericalEllipsoid()
+	"Extended geod structure, used for the inverse geodesic problem to compute distance and azimuth between points on earth. (Relies on GeographicLib)." 
 	geod::Proj4.geod_geodesic = Proj4.geod_geodesic(ellipsoid)
+end
+EarthModel(e::Ellipsoid) = EarthModel(;ellipsoid = e)
 end
 
 # ╔═╡ 1f2b9b74-de46-401d-8a46-0434b9f9aca1
@@ -242,6 +249,16 @@ begin
 		uconvert(u"m",alt) |> ustrip)	
 end
 
+# ╔═╡ 3033d5c1-d8e0-4d46-0001-7dec4ff7afbd
+# Show method for LLA
+function Base.show(io::IO,lla::LLA)
+	print(io,"LLA(")
+	_print_angle(io,lla.lat,"lat",false)
+	_print_angle(io,lla.lon,"lon",false)
+	_print_length(io,lla.alt,"alt",true)
+	print(io,")")
+end
+
 # ╔═╡ 3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
 function Base.isapprox(x1::LLA, x2::LLA)
 	x1.alt ≉ x2.alt && return false
@@ -340,6 +357,53 @@ end
 
 # ╔═╡ 7344190c-7989-4b55-b7be-357f7d6b7370
 Base.isnan(era::ERA) = isnan(era.el)
+
+# ╔═╡ 11938cb6-46b3-0001-96c0-ef6424d1d0db
+#=╠═╡ notebook_exclusive
+md"""
+# Inverse Geodesic Problem
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 11938cb6-46b3-0002-96c0-ef6424d1d0db
+"""
+    geod_inverse(geod::Proj4.geod_geodesic, lonlat1::AbstractVector{Cdouble}, lonlat2::AbstractVector{Cdouble})
+	geod_inverse(geod::Proj4.geod_geodesic, lla1::LLA, lla2::LLA)
+Solve the inverse geodesic problem.
+
+Args:
+
+	g       - the geod_geodesic object specifying the ellipsoid.
+	lonlat1 - point 1 (degrees), where lat ∈ [-90, 90], lon ∈ [-540, 540) 
+	lonlat2 - point 2 (degrees), where lat ∈ [-90, 90], lon ∈ [-540, 540) 
+
+Returns:
+
+	dist    - distance between point 1 and point 2 (meters).
+	azi1    - azimuth at point 1 (degrees) ∈ [-180, 180)
+	azi2    - (forward) azimuth at point 2 (degrees) ∈ [-180, 180)
+
+Remarks:
+
+	If either point is at a pole, the azimuth is defined by keeping the longitude fixed,
+	writing lat = 90 +/- eps, and taking the limit as eps -> 0+.
+"""
+function geod_inverse(geod::Proj4.geod_geodesic, lonlat1::AbstractVector{Cdouble}, lonlat2::AbstractVector{Cdouble})
+	dist = Ref{Cdouble}()
+	azi1 = Ref{Cdouble}()
+	azi2 = Ref{Cdouble}()
+	ccall((:geod_inverse, Proj4.libproj), Cvoid, (Ptr{Cvoid},Cdouble,Cdouble,Cdouble,
+			Cdouble,Ptr{Cdouble},Ptr{Cdouble},Ptr{Cdouble}),
+			pointer_from_objref(geod), lonlat1[2], lonlat1[1], lonlat2[2], lonlat2[1], dist, azi1, azi2)
+	dist[], azi1[], azi2[]
+end
+
+# ╔═╡ 11938cb6-46b3-0003-96c0-ef6424d1d0db
+function geod_inverse(geod::Proj4.geod_geodesic, lla1::LLA, lla2::LLA)
+	lonlat1 = rad2deg.(SA_F64[lla1.lon,lla1.lat])
+	lonlat2 = rad2deg.(SA_F64[lla2.lon,lla2.lat])
+	geod_inverse(geod,lonlat1,lonlat2)
+end
 
 # ╔═╡ 11938cb6-46b3-499b-96c0-ef6424d1d0db
 #=╠═╡ notebook_exclusive
@@ -959,6 +1023,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─e3c221c6-6c4a-4b5f-93a6-30d3508ac9d2
 # ╟─8368ae01-ce53-449e-87dd-8dfa3f29f8f4
 # ╠═f207d849-ebff-4e6c-95bb-50693cb7c9b6
+# ╠═3033d5c1-d8e0-4d46-0001-7dec4ff7afbd
 # ╠═3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
 # ╠═528beffe-0707-4661-8970-def1b1e00ea5
 # ╟─f951805e-515a-475f-893f-bb8b968e425c
@@ -966,6 +1031,9 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═9be2fd5c-4b6c-4e13-b2aa-fb7120a504b7
 # ╠═16782c72-ecb1-48ec-8510-78e2e0689a10
 # ╠═7344190c-7989-4b55-b7be-357f7d6b7370
+# ╟─11938cb6-46b3-0001-96c0-ef6424d1d0db
+# ╟─11938cb6-46b3-0002-96c0-ef6424d1d0db
+# ╟─11938cb6-46b3-0003-96c0-ef6424d1d0db
 # ╟─11938cb6-46b3-499b-96c0-ef6424d1d0db
 # ╟─d2c248b1-c48e-437b-a910-edcc59b4424f
 # ╠═7b306ed5-4bda-465d-abf2-4d07cb4642c1
