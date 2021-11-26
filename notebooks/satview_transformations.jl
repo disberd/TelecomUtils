@@ -56,6 +56,16 @@ md"""
 # ╔═╡ f41cdadb-808d-4714-983a-b871151ff1c0
 @plutoinclude "satview_basics.jl" "all"
 
+# ╔═╡ f41cdadb-808d-4714-983a-b871151ff32f
+#=╠═╡ notebook_exclusive
+md"""
+# Exports
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
+export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
+
 # ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de552d
 #=╠═╡ notebook_exclusive
 md"""
@@ -72,7 +82,7 @@ md"""
 
 # ╔═╡ 00d31f8c-dd75-4d8f-83b6-d8e976b040d0
 # Generic definition, the @inline here was necessary to avoid allocations, see https://discourse.julialang.org/t/dispatch-on-value-allocating/26337/11
-@inline _rotation_matrix(s::Symbol,lat,lon) = _rotation_matrix(Val(s),lat,lon)
+@inline _rotation_matrix(s::Symbol,lat,lon)::RotMatrix3{Float64} = _rotation_matrix(Val(s),lat,lon)
 
 # ╔═╡ 3cc3b232-01e8-4064-8a2a-abe14aa6e5c0
 #=╠═╡ notebook_exclusive
@@ -88,7 +98,7 @@ begin
 	
 	Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
 	"""
-@inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
+@inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)::RotMatrix3{Float64}
 		# Precompute the sines and cosines
 		sλ, cλ = sincos(lat)
 		sφ, cφ = sincos(lon)
@@ -100,7 +110,7 @@ begin
 			 cφ*cλ   cφ*sλ   sφ
 			] |> RotMatrix
 	end
-	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon) = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
+	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
 end
 
 # ╔═╡ 46730818-1bb8-4c79-8b6f-f8cf0188c918
@@ -113,7 +123,7 @@ md"""
 # ╔═╡ 17d1271f-713d-4a85-b6ef-43e2632b74cf
 begin
 	# Define the relevant rotation matrix
-		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)
+		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)::RotMatrix3{Float64}
 		# Precompute the sines and cosines
 		sλ, cλ = sincos(lat)
 		sφ, cφ = sincos(lon)
@@ -125,7 +135,7 @@ begin
 			 0   cλ    -sλ
 			] |> RotMatrix
 	end
-	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon) = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
+	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
 end
 
 # ╔═╡ 965e7534-cc27-4657-b3cf-5a5b36be2a9c
@@ -1301,6 +1311,8 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─d852d113-2be1-4580-92dd-bf4082d0df11
 # ╠═36f00194-59ac-4e1a-a746-f41c9057e972
 # ╠═f43c934c-84c8-4c3d-b4d9-2b716753d89c
+# ╠═f41cdadb-808d-4714-983a-b871151ff32f
+# ╠═f5577c80-ffdd-44ae-bc05-2baed9de1234
 # ╠═059edd4a-b3b7-4db2-9ecd-ca8a36021d2e
 # ╠═e43a64ba-d776-42dd-97be-2be24a2769a7
 # ╟─91045805-53e1-457a-b7d1-db5e6df5af19
