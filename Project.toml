@@ -1,7 +1,7 @@
 name = "TelecomUtils"
 uuid = "0c499ce9-5070-43f6-85c8-6d9cb66e1eb8"
 authors = ["Alberto Mengali <disberd@gmail.com> and contributors"]
-version = "0.1.9"
+version = "0.1.10"
 
 [deps]
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
