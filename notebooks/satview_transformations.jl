@@ -441,6 +441,16 @@ begin
 	end
 end
 
+# ╔═╡ 9bcf7751-ad05-404c-8432-990b436a7634
+#=╠═╡ notebook_exclusive
+md"""
+### compute\_sat\_position
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f34b95e5-d906-400f-a201-b9d2bf5a1b12
+compute_sat_position(llaorecef::Union{LLA, StaticVector{3}}, args...;ellipsoid = wgs84_ellipsoid, kwargs...) = compute_sat_position(ECEFfromERA(llaorecef; ellipsoid), args...;kwargs...)
+
 # ╔═╡ 97e3be69-b480-482b-a1aa-5bf2ede10cbe
 #=╠═╡ notebook_exclusive
 md"""
@@ -513,6 +523,33 @@ function _intersection_solutions(pointing_ecef,sat_ecef,a,b)
 	
 	return t₁,t₂
 end
+
+# ╔═╡ 29d1bcf5-8d65-445e-9fbb-67e742f55acb
+"""
+	compute_sat_position(era2ecef::ECEFfromERA, el, az; h)
+	compute_sat_position(lla::LLA, el, az; h)
+	compute_sat_position(ecef::StaticVector{3}, el, az; h)
+Given a [`ECEFfromERA`](@ref) transformation, a target elevation `el` and azimuth `az`, and a reference height `h` [m] of the satellite from the orbit center, provides the ECEF coordinates of the satellite that is seen with angles `el` and `az` from the origin of the `era2ecef` instance at an orbit altitude of `h` **(computed from the earth/orbit center, not from the earth surface)**.
+
+If called with an `LLA` or ECEF coordinate as the first argument, it automatically constructs the ECEFfromERA instance `era2ecef` with the provided coordinate as origin.
+
+# Note
+The values `el` and `az` are used internally to construct [`ERA`](@ref) objects, so are to be given in [rad] or specified in degrees using `°` from `Unitful`, which is also exported by TelecomUtils.
+
+See also: [`ERA`](@ref), [`ECEF`](@ref), [`LLA`](@ref), [`ERAfromECEF`](@ref), [`ECEFfromERA`](@ref)
+"""
+function compute_sat_position(era2ecef::ECEFfromERA, el, az; h)
+	# Find the ecef pointing, we simply compute the ecef coordinate of an ERA with unitary radius and subtract the origin coordinate of the era2ecef transformation
+	pointing_ecef = era2ecef(ERA(el, 1, az)) - era2ecef.origin
+	# Find the intersections with the sphere at distance h from the earth center. Since we are looking outside of earth, there are always two solution the first of which is always negative
+	_, t = _intersection_solutions(pointing_ecef, era2ecef.origin, h, h)
+	sat_ecef = era2ecef(ERA(el, t, az))
+end
+
+# ╔═╡ 1df46c22-c2ab-4384-9436-4b45e5603ed2
+#=╠═╡ notebook_exclusive
+compute_sat_position(LLA(0°,0°,0), 90°, 0°; h = 7e6) 
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
 # Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth 
@@ -663,7 +700,10 @@ begin
 end
 
 # ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
-export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
+begin
+	export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
+	export compute_sat_position
+end
 
 # ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
 #=╠═╡ notebook_exclusive
@@ -692,6 +732,26 @@ md"""
 # ╔═╡ 61ace485-dc58-42dd-a58f-1cd13e1f6444
 #=╠═╡ notebook_exclusive
 @benchmark $LLAfromECEF()(SA_F64[1e7,1e6,1e6])
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 76da884a-60ff-4b24-bd1f-7d5d8824ab35
+#=╠═╡ notebook_exclusive
+md"""
+## compute\_sat\_positions
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ b07c6df9-586e-4a4c-be16-cc4ac7b1f704
+#=╠═╡ notebook_exclusive
+let
+	h = 6371e3 + 735e3
+	lla = LLA(10°, 25°, 0km)
+	era2ecef = ECEFfromERA(lla)
+	el, az = 35°, 80°
+	satecef = compute_sat_position(era2ecef, el, az;h)
+	invera = inv(era2ecef)(satecef)
+	@test invera.el ≈ el && invera.az ≈ az
+end
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1349,6 +1409,10 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╟─2b32d7e7-1519-4fe9-bfa8-d3c6a57b237f
 # ╟─de6f9a8b-efc1-4666-88fe-31005efcd06e
 # ╠═0bff095f-534e-4342-82c2-931f75e16c18
+# ╟─9bcf7751-ad05-404c-8432-990b436a7634
+# ╠═29d1bcf5-8d65-445e-9fbb-67e742f55acb
+# ╠═f34b95e5-d906-400f-a201-b9d2bf5a1b12
+# ╠═1df46c22-c2ab-4384-9436-4b45e5603ed2
 # ╟─97e3be69-b480-482b-a1aa-5bf2ede10cbe
 # ╟─95704330-4d7b-44fd-b8c0-d1570812f619
 # ╟─2e788b78-e5e0-4f60-aa8c-ad4f203c982e
@@ -1367,5 +1431,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═e7a82a42-9852-4ac3-8612-938004bf24de
 # ╠═89eb0e56-e1d5-4497-8de2-3eed528f6358
 # ╠═61ace485-dc58-42dd-a58f-1cd13e1f6444
+# ╟─76da884a-60ff-4b24-bd1f-7d5d8824ab35
+# ╠═b07c6df9-586e-4a4c-be16-cc4ac7b1f704
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
