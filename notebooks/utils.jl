@@ -336,7 +336,7 @@ function generate_colors(BeamCenters::AbstractVector,N_Colours::Int=4;first_colo
     if N_Colours == 1
         Colours = ones(n_beams)
         nbeams_per_color = n_beams
-        idxs = fill(fill(true,nbeams))
+        idxs = fill(fill(true,n_beams))
     end
 
     # Find the minimum distance in U and V
