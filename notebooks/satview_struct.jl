@@ -112,7 +112,7 @@ See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref
 	function SatView(ecef::StaticVector{3},em::EarthModel)
 		lla = LLAfromECEF(em.ellipsoid)(ecef)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
-		SatView(ecef,lla,em.ellipsoid,R)
+		SatView(ecef,lla,em,R)
 	end
 end
 
