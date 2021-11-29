@@ -171,11 +171,21 @@ begin
 		change_position!(sv::SatView, ecef, lla::LLA, R)
 		change_position!(sv::SatView, lla::LLA)
 		change_position!(sv::SatView, ecef::StaticVector{3})
-	Change the position of a [`SatView`](@ref) object, if only ecef or lla coordinates are provided, the remaining arguments are computed automatically.
-	
-	Returns the modified [`SatView`](@ref) object
+Change the position of a [`SatView`](@ref) object `sv`, also returning as output the modified
+`sv`.  The function mutates the `ecef`, `lla` and `R` fields of the `sv`
+object with the values provided as arguments (when using the 1st method above).\\
+If only `ecef` or `lla` coordinates are provided (2nd and 3rd method above), the remaining
+two arguments are computed automatically.
 
-See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_ecef`](@ref).
+One would normally use either the 2nd or 3rd mehtod so that the two missing components are
+correctly computed by the function.\\
+The first method avoids computations but does not validate that `ecef`, `lla` and `R` are
+correct and refer to the same position in space. For this reason the first method should
+only be used if those values are correctly pre-computed elsewhere and one wants to avoid the
+duplicate computations. 
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref),
+[`get_ecef`](@ref), [`get_ecef`](@ref).
 	"""
 	function change_position!(sv::SatView, ecef, lla::LLA, R)
 		setfield!(sv,:ecef,ecef)
@@ -349,9 +359,9 @@ md"""
 	get_ecef(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 Computes the ECEF coordinates of a point on earth seen from the satellite identified by `sv`, the angular pointing identified by `pointing` and located at an altitude `h` [m] above the reference Earth ellipsoid of `sv`.
 
-The optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates..
+The optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates.
 
-See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`change_position!`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_ecef(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
