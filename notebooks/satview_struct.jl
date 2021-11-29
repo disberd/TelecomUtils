@@ -168,16 +168,16 @@ md"""
 # ╔═╡ 41370c82-d32a-41ea-a21a-614574292c21
 begin
 	"""
-		change_position!(sv::SatView, ecef, lla::LLA, R)
-		change_position!(sv::SatView, lla::LLA)
-		change_position!(sv::SatView, ecef::StaticVector{3})
+	change_position!(sv::SatView, ecef, lla::LLA, R)
+	change_position!(sv::SatView, lla::LLA)
+	change_position!(sv::SatView, ecef::StaticVector{3})
 Change the position of a [`SatView`](@ref) object `sv`, also returning as output the modified
 `sv`.  The function mutates the `ecef`, `lla` and `R` fields of the `sv`
 object with the values provided as arguments (when using the 1st method above).\\
 If only `ecef` or `lla` coordinates are provided (2nd and 3rd method above), the remaining
 two arguments are computed automatically.
 
-One would normally use either the 2nd or 3rd mehtod so that the two missing components are
+One would normally use either the 2nd or 3rd method so that the two missing components are
 correctly computed by the function.\\
 The first method avoids computations but does not validate that `ecef`, `lla` and `R` are
 correct and refer to the same position in space. For this reason the first method should
