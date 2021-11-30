@@ -445,7 +445,7 @@ get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, kind::Symbol=:uv) =
 get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA, ::ExtraOutput) = geod_inverse(sv.geod, lla1, lla2)
 
 # ╔═╡ af71267d-b5ee-46b7-bf8d-d740033d35e0
-get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA) = geod_inverse(sv.geod, lla1, lla2, ExtraOutput())[1]
+get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA) = get_distance_on_earth(sv, lla1, lla2, ExtraOutput())[1]
 
 # ╔═╡ 2612961b-0e1e-4615-8959-74ab3bc919f9
 #=╠═╡ notebook_exclusive
