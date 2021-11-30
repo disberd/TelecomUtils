@@ -361,22 +361,22 @@ md"""
 	geod_inverse(geod::Proj4.geod_geodesic, lla1::LLA, lla2::LLA)
 Solve the inverse geodesic problem.
 
-Args:
+# Args
 
-	g       - the geod_geodesic object specifying the ellipsoid.
-	lonlat1 - point 1 (degrees), where lat ∈ [-90, 90], lon ∈ [-540, 540) 
-	lonlat2 - point 2 (degrees), where lat ∈ [-90, 90], lon ∈ [-540, 540) 
+- `g`       → the geod_geodesic object specifying the ellipsoid.
+- `lonlat1` → point 1 (degrees), where lat ∈ [-90, 90], lon ∈ [-540, 540) 
+- `lonlat2` → point 2 (degrees), where lat ∈ [-90, 90], lon ∈ [-540, 540) 
 
-Returns:
+# Outputs
 
-	dist    - distance between point 1 and point 2 (meters).
-	azi1    - azimuth at point 1 (degrees) ∈ [-180, 180)
-	azi2    - (forward) azimuth at point 2 (degrees) ∈ [-180, 180)
+- `dist` → distance between point 1 and point 2 (meters).
+- `azi1` → azimuth at point 1 (degrees) ∈ [-180, 180)
+- `azi2` → (forward) azimuth at point 2 (degrees) ∈ [-180, 180)
 
-Remarks:
+# Remarks
 
-	If either point is at a pole, the azimuth is defined by keeping the longitude fixed,
-	writing lat = 90 +/- eps, and taking the limit as eps -> 0+.
+If either point is at a pole, the azimuth is defined by keeping the longitude fixed,
+writing lat = 90 +/- eps, and taking the limit as eps -> 0+.
 """
 function geod_inverse(geod::Proj4.geod_geodesic, lonlat1::AbstractVector{Cdouble}, lonlat2::AbstractVector{Cdouble})
 	dist = Ref{Cdouble}()
