@@ -52,7 +52,13 @@ md"""
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 48c73104-fe4c-4543-942a-6f23b0fd2547
-const Point2D = Union{Tuple{Number,Number},StaticVector{2}}
+const Point{N} = Union{Tuple{Vararg{<:Number, N}},StaticVector{N,<:Number}}
+
+# ╔═╡ 48c73104-fe4c-4543-0001-6f23b0fd2547
+const Point2D = Point{2}
+
+# ╔═╡ 48c73104-fe4c-4543-0002-6f23b0fd2547
+const Point3D = Point{3}
 
 # ╔═╡ c4402f72-67ac-4630-a651-da81c1df71bf
 """
@@ -1004,6 +1010,8 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═4c06d21c-ac14-4522-bf25-2e0a1ed2d6b9
 # ╟─1e3da0c9-2f96-4637-9093-ac7f10c1ad27
 # ╠═48c73104-fe4c-4543-942a-6f23b0fd2547
+# ╠═48c73104-fe4c-4543-0001-6f23b0fd2547
+# ╠═48c73104-fe4c-4543-0002-6f23b0fd2547
 # ╠═c4402f72-67ac-4630-a651-da81c1df71bf
 # ╟─e796d5be-e011-45d3-ad90-58769feb5e85
 # ╠═d890aff1-dbd0-451c-bf14-bde9758c3be0
