@@ -60,7 +60,7 @@ function lattice_generator(dx::T, dy::T, ds::T;x0::T = T(0), y0::T = T(0), M::In
 	# Function to generate y position as function of row,column number m,n
 	y(n) = n * dy + y0
 	# Generate the elements. For each row, shift the columns to always have the search domain around x=0
-	gen = ((x(m - round(Int,n * ds / dx), n), y(n)) for n in -N:N,m in -M:M)
+	gen = (SVector(x(m - round(Int,n * ds / dx), n), y(n)) for n in -N:N,m in -M:M)
 	return gen
 end
 
