@@ -15,6 +15,7 @@ const k_B = 1.38064852e-23 # Boltzmann constant [m² kg / (s² K)]
 export wgs84_ellipsoid
 
 include("../notebooks/utils.jl")
+include("../notebooks/snr2speff.jl")
 include("../notebooks/satview_basics.jl")
 include("../notebooks/satview_transformations.jl")
 include("../notebooks/satview_struct.jl")
