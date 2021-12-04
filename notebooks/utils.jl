@@ -4,21 +4,34 @@
 # using Markdown
 # using InteractiveUtils
 
-# ╔═╡ 74975885-9a4e-4857-8135-9e4f69061caf
-begin
-	using DocStringExtensions
-	using StaticArrays
-	using LinearAlgebra
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
 end
 
 # ╔═╡ c0a30957-4c7b-4d7b-bfa9-c2fb691a077b
 #=╠═╡ notebook_exclusive
 begin
+	using Revise
 	using PlutoUtils
 	using PlotlyBase
 	using BenchmarkTools
 end
   ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 74975885-9a4e-4857-8135-9e4f69061caf
+begin
+	using DocStringExtensions
+	using StaticArrays
+	using LinearAlgebra
+	using Dictionaries
+	using SplitApplyCombine
+end
 
 # ╔═╡ 379613ec-0973-4000-ae8c-d7c33ddca18e
 #=╠═╡ notebook_exclusive
@@ -38,6 +51,9 @@ md"""
 # Exports
 """
   ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 7f645e69-3334-44db-9ba1-9f2d3e0127a2
+const ColorOrderDict{I} = Dictionary{SVector{2, I}, I}
 
 # ╔═╡ 8660a7c4-eb78-4e7c-966b-d759df7f3dfa
 #=╠═╡ notebook_exclusive
@@ -209,16 +225,275 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ 0ddf072d-009d-42f2-9a8f-f69fbab750c6
+#=╠═╡ notebook_exclusive
+md"""
+The idea here is to find the optimal color ordering that starting from the color associated with the lattice point in (0,0) and populate the available colors in order to always selected the *un-picked* color that has the highest distance from the currently active colors (*picked* lattice points).
+
+To do so, the idea is to verify the distane not just with the unique lattice points, but also with the neighbor lattice points on the direction of the center of the lattice parallelpiped.
+To find the direction of the center of the parallelepiped, we subtract half of the lattice generating vectors from each point and compute the resulting point projection on the base of the parallelepipeid. The sign of the coefficients gives 4 possible quadrant which identify where to extend the lattice points for the computation of the closest active beam. 
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5db224d4-7379-4c8f-bcee-9cf00011d286
+#=╠═╡ notebook_exclusive
+md"""
+## plot\_color\_basis
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5f62c7d2-ebfb-43e6-b9e3-06ca78c99390
+"""
+$TYPEDSIGNATURES
+Plot the two arrows of the two basis vectors identified by matrix F (one vector per column).
+Plotly anotations are used for creating the arrows
+"""
+function plot_basis_vector(F)
+	common_params = (
+		ax = 0,
+		ay = 0,
+		axref = "x",
+		ayref = "y",
+		arrowhead = 1,
+		arrowwidth = 2,
+		xanchor = "right", # Needed to have the tail match the origin
+		yanchor = "top", # Needed to have the tail match the origin
+	)
+	# Plot the first vector arrow
+	a1 = attr(;
+		x = F[1,1],
+		y = F[2,1],
+		common_params...
+	)
+	# Plot the first vector arrow
+	a2 = attr(;
+		x = F[1,2],
+		y = F[2,2],
+		common_params...
+	)
+	Plot(Layout(annotations = [a1, a2]))
+end
+
+# ╔═╡ 6107a3dc-26dd-4a0d-aeff-5eca2cd1dcd4
+#=╠═╡ notebook_exclusive
+@bind NN Slider(4:20)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 0d33b162-cc06-4c3b-8ade-5b40106dec0e
+#=╠═╡ notebook_exclusive
+NN
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 063db114-1b95-47d8-8f8b-26eaff8f9574
+#=╠═╡ notebook_exclusive
+md"""
+## adjugate
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 8d4eb806-8af1-4127-8f72-6dd68f810eb5
+"""
+	adjugate(A::SMatrix{2,2,<:Number,4})
+Compute the [adjugate matrix](https://en.wikipedia.org/wiki/Adjugate_matrix) for a 2x2 `SMatrix`.
+
+Used to compute the integer vector modulo in 2D space.
+
+See: [`mod`](@ref)
+"""
+adjugate(A::T) where T <: SMatrix{2, 2, <:Number, 4} = T(A[4], -A[2], -A[3], A[1])
+
+# ╔═╡ d175246c-552a-4f0f-8415-2339e9af833c
+#=╠═╡ notebook_exclusive
+md"""
+## Base.mod
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 087730c6-cf72-4133-8064-d5619ea4b188
+"""
+# Integer Vector Modulo
+	mod(m::SVector{2,<:Integer}, M::SMatrix{2,2,<:Integer,4})
+Compute the integer modulo vector operation of an integer 2D vector with respect to an integer 2x2 matrix. Taken from `[1]`, explots the adjugate matrix instead of the inverse to avoid rounding problems
+
+See: [`adjugate`](@ref)
+
+References: 
+- [[1]](https://doi.org/10.1109/TSP.2020.3023584) L. Xiao, X. -G. Xia and Y. -P. Wang, "Exact and Robust Reconstructions of Integer Vectors Based on Multidimensional Chinese Remainder Theorem (MD-CRT)," in IEEE Transactions on Signal Processing, vol. 68, pp. 5349-5364, 2020, doi: 10.1109/TSP.2020.3023584.
+"""
+function Base.mod(m::SVector{2,<:Integer}, M::SMatrix{2,2,<:Integer,4})
+	M * mod.(adjugate(M)m, det(M))/det(M) |> SVector{2,Int}
+end;
+
+# ╔═╡ 745bb1c1-a312-4dbd-a29f-0836b7dbe8a7
+#=╠═╡ notebook_exclusive
+md"""
+## get\_deterministic\_color\_order
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 76275b93-5668-4ac9-a6a2-2f4b30ca8ab3
+#=╠═╡ notebook_exclusive
+md"""
+## get\_color\_illumination\_order
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 9ccf08d4-2ffb-4f36-a632-3b0ed4017d92
+#=╠═╡ notebook_exclusive
+let
+	a = rand(SVector{2,Float64},100)
+	@benchmark map(x -> Int.(sign.(x)), $a)
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ ca09052d-1fce-422d-9205-ae4e87dc4db4
+#=╠═╡ notebook_exclusive
+@benchmark get_color_illumination_order(50; lattice_type = :square)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f700edf6-0c44-4507-bbf5-4c5dc02fa74c
+#=╠═╡ notebook_exclusive
+NNN = 16
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 019c9ab2-ef2b-4677-a5aa-d0363fffef72
+#=╠═╡ notebook_exclusive
+n5 = 17
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ cffd2b81-66c1-4f50-948c-e38ec011105d
+#=╠═╡ notebook_exclusive
+N4 = 4
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 7785e6b1-881e-4088-82fe-3dad106b07be
+#=╠═╡ notebook_exclusive
+n4 = 4
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 9cd5609b-1e58-4d39-87ab-b3d7542de691
+#=╠═╡ notebook_exclusive
+n6, nc = 8, 13
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 89888da7-4912-4557-a375-0150f80ee703
+#=╠═╡ notebook_exclusive
+md"""
+## new\_color\_order
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f942e39c-0d93-4bc8-8ff2-112fed566014
+"""
+$TYPEDSIGNATURES
+Find the new optimal color ordering when starting from color `n` rather than from 1.
+# Arguments
+- `n` → New starting color.
+- `color_order_dict` → original optimal color order for the current coloring scheme obtained via [`get_color_illumination_order`](@ref).
+- `F` → lattice generating matrix for the current coloring scheme, obtained using [`generate_F_reuse_matrix`](@ref).
+"""
+function new_color_order(n::Int, color_order_dict::ColorOrderDict, F)
+	@assert n <= length(color_order_dict) "The provided color is higher than the length of the `color_order_dict`"
+	# Find the point lattice point associated to the current color
+	p_current = filter(x -> x == n, color_order_dict).indices.values[1]
+	idict = sort(color_order_dict) |> x->Dictionary(x.values, x.indices.values)
+	# Find the new color
+	new_order = map(idict) do p
+		v = mod(p + p_current, F)
+		color_order_dict[v]
+	end
+	return new_order.values
+end
+
+# ╔═╡ df0602a2-d278-4fae-9957-30c85b55598a
+#=╠═╡ notebook_exclusive
+md"""
+## get\_projection
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ a86b2ff6-1967-424f-86eb-40fb4288c8b5
+"""
+$TYPEDSIGNATURES
+Compute the generic projection coefficients (coordinates) of `v1` on the base identified by matrix `B`, composed of the two generating vectors `v2` and `v3`
+
+Return the projection coefficients as a StaticVector of 2 elements.
+
+References:
+- [`https://math.stackexchange.com/questions/148199/equation-for-non-orthogonal-projection-of-a-point-onto-two-vectors-representing`](https://math.stackexchange.com/questions/148199/equation-for-non-orthogonal-projection-of-a-point-onto-two-vectors-representing)
+"""
+function get_projection(v1, B)
+	# extract the basis generating vectors
+	# Compute the matrix of the linear system of equations
+	A = B'B
+	# Compute the target vector 
+	b = B'v1
+	# solve the system
+	x = A\b
+end
+
+# ╔═╡ 41817b1f-4c5e-4a55-93b7-520d6b71ea9c
+function get_color_illumination_order(F, unique_points)
+	N = length(unique_points) # Number of colors
+	# We preallocate the array of the distances
+	check_vec = Vector{eltype(unique_points)}(undef, N) # +3 because the origin is replicated 3 times
+	# Preallocate the output to be modified
+	out = Dictionary(unique_points, ones(Int,N))
+	pts = deepcopy(unique_points)
+	# Put the expanded origin points
+	check_vec[1] = popat!(pts,1)
+	@views @inbounds for n = 2:N
+		# Find distance between all remaining points and currently populated points
+		maxdist = 0.0
+		id = 0
+		for (i,p) ∈ enumerate(pts)
+			mindist = Inf
+			# Find the projection of on the generator axis
+			h = get_projection(p, F)
+			α, β = -Int(sign(h[1])), -Int(sign(h[2]))
+			# Here we don't only check p but also the relevant closest lattice points
+			for (nn,v) ∈ enumerate((SA[0,0], α*F[:,1], β*F[:,2], F * SA[α, β]))
+				pp = v + p
+				for c ∈ check_vec[1:n-1]					
+					dist = norm(pp-c)
+					mindist = dist < mindist ? dist : mindist
+				end
+			end
+			# Find the index of the point that has the maximum minimum distance
+			maxdist, id = mindist > maxdist ? (mindist, i) : (maxdist, id)
+		end
+		# Put that vector in the check_vec and change it's order in the dict
+		pt = popat!(pts, id)
+		check_vec[n] = pt
+		set!(out, pt, n)
+	end
+	out
+end
+
 # ╔═╡ 3f2a31d4-0fa8-40fa-9dc4-bd6a26d2ddc9
 # Initialize the vector that contains the matrix to compute the beam coloring. We limit ourselves at 500 colors to start
-const F_reuse_matrix = (square = SMatrix{2,2,Float64,4}[], triangular = SMatrix{2,2,Float64,4}[])
+const F_reuse_matrix = (square = SMatrix{2,2,Int,4}[], triangular = SMatrix{2,2,Int,4}[])
+
+# ╔═╡ dbef7000-7c39-49f7-b24e-f0fb436eb54e
+#=╠═╡ notebook_exclusive
+md"""
+## compute\_F\_cell
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 9183aa40-9dc1-4237-8bf5-de42c93b149f
+#=╠═╡ notebook_exclusive
+md"""
+## \_coloring\_inner\_bruteforce!
+"""
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 6b9beb62-dc7e-4b8b-9b7c-8fee5b1da98f
 function _coloring_inner_bruteforce!(T_mat, rot_mat, grid_max)
     max_colours = length(T_mat)
     check_vec = fill((typemax(Int),typemax(Int)),max_colours)
     @inline norm2(x) = sum(abs2.(x))
-    @inbounds for x1 = 0:grid_max, y1 = 0:grid_max, x2 = -grid_max:grid_max, y2 = 0:grid_max
+    @inbounds for x1 = 0:grid_max, y1 = grid_max:-1:-grid_max, x2 = 0:grid_max, y2 = 0:grid_max
         mat = @SMatrix [x1 y1;x2 y2]
         # Compute the determinant
         t_det = Int(det(mat))
@@ -244,18 +519,22 @@ function _coloring_inner_bruteforce!(T_mat, rot_mat, grid_max)
             # Update the check_vec
             check_vec[t_det] = (-dmin,frobe)
             # Update the vector containing the generating matrices
-            T_mat[t_det] = mat'
+            T_mat[t_det] = round.(Int, mat')
         end
     end
 end
 
 # ╔═╡ 14cb2a0b-2ea8-471b-987f-1647f1516992
 ## Here we have the functions for the coloring computation
-function compute_F_cell(max_colours::Int;grid_max::Int=25)
+function compute_F_cell(max_colours::Int;grid_max::Int=ceil(Int,sqrt(max_colours))+5)
     #=
     This function is used to compute all the possible 2x2 lattice generating matrices for possible coloring schemes up to 'max_colours' colors
-    Computation is done with a brute-force approach, generating all possible 2x1 vectors with maximum elements up to grid_max
+    Computation is done with a brute-force approach, generating all possible 2x1 vectors with maximum elements up to grid_max.
+
+    The very heuristic automatic number of the grid_max is valid up to 5000 colors
     =#
+
+    @assert max_colours <= 5000 "A number of colors greater than 5000 is currently not supported"
     
     # Find the current length of the pre-computed vector
     current_length = length(F_reuse_matrix.square)
@@ -264,19 +543,220 @@ function compute_F_cell(max_colours::Int;grid_max::Int=25)
         return
     end
     n_missing = max_colours - current_length
-    append!(F_reuse_matrix.square,Vector{SMatrix{2,2,Float64,4}}(undef,n_missing))
-    append!(F_reuse_matrix.triangular,Vector{SMatrix{2,2,Float64,4}}(undef,n_missing))
+    append!(F_reuse_matrix.square,Vector{SMatrix{2,2,Int,4}}(undef,n_missing))
+    append!(F_reuse_matrix.triangular,Vector{SMatrix{2,2,Int,4}}(undef,n_missing))
     # Compute the matrix for the square lattice
     _coloring_inner_bruteforce!(F_reuse_matrix.square,I,grid_max)
     # Compute the matrix for the triangular lattice
     _coloring_inner_bruteforce!(F_reuse_matrix.triangular,@SMatrix([1 0;cosd(60) sind(60)]),grid_max)
 end
 
+# ╔═╡ 1155e836-99d0-4cc8-83d0-355a6ab6fcc0
+#=╠═╡ notebook_exclusive
+md"""
+## generate\_F\_reuse\_matrix
+"""
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ 1d44cf1c-11a5-4366-94f3-85b695c6ca12
-function generate_F_reuse_matrix(lattice_type::Symbol=:triangular,N_Colours::Int=4;max_colours::Int=max(10,N_Colours))
+function generate_F_reuse_matrix(N_Colours::Int=4; lattice_type::Symbol=:triangular, max_colours::Int=max(10,N_Colours))
+	@assert lattice_type ∈ (:triangular, :square) "The lattice type has to be either :triangular or :square"
     compute_F_cell(max_colours)
     return getproperty(F_reuse_matrix,lattice_type)[N_Colours]
 end
+
+# ╔═╡ a7037a49-c2cb-48b6-bbf9-ca8150afcfbe
+#=╠═╡ notebook_exclusive
+FF = generate_F_reuse_matrix(:triangular, NN)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 259ea307-2862-42f3-866a-be8f4eb83cf3
+#=╠═╡ notebook_exclusive
+plot_basis_vector(FF)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ e6033b3e-51fa-4eeb-87ff-e5b5359aebc5
+"""
+$TYPEDSIGNATURES
+Assign a given set of unique of N integer 2D vectors, assign a deterministic and consistent order for associating these vectors to indices (1:N) used for coloring.
+
+The order is obtained by sorting the vectors first by the norm and then by the angle it makes with respect to the X-axis (first dimension)
+"""
+function get_deterministic_color_order(N::Int; lattice_type = :triangular)
+	T = SVector{2,Int}
+	# Get the F_matrix
+	F = generate_F_reuse_matrix(N; lattice_type)
+	# Find the range over which to generate the potential lattice points
+	M = [F*SA[1,1] F]
+	xstart, xend = extrema(M[1,:])
+	ystart, yend = extrema(M[2,:])
+	# pts = ((x,y) for x ∈ xstart:xend, y ∈ ystart:yend)
+	# Create the vector of possible values
+	V = zeros(T, N)
+	# Start from n = 1 as 0,0 is for sure in the set
+	n = 1
+	@inbounds for x ∈ xstart:xend, y ∈ ystart:yend
+		p = T(x,y)
+		# Get the vector modulo the color generating matrix
+		v = mod(p,F)
+		if v ∉ V
+			n += 1
+			V[n] = v
+			n == N && break
+		end
+	end
+	# Check if we found all the vector
+	@assert n == N "Not all unique vectors were found!"
+	# We now sort this vector
+	sort!(V; by = v -> (norm(v), mod(atan(reverse(v)...), 2π)))		
+end
+	
+
+# ╔═╡ 272234bf-ea90-4d24-b5f4-1cd6cdaea20b
+#=╠═╡ notebook_exclusive
+get_deterministic_color_order(150)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5da650b5-9309-418b-92d9-3388b5385e9b
+#=╠═╡ notebook_exclusive
+fffvec = get_deterministic_color_order(NNN; lattice_type = :triangular)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 6579518a-2130-4e25-b4eb-966e60203f17
+"""
+$TYPEDSIGNATURES
+Get the illumination order to achieve maximum possible distance between already illuminated colors and next illuminated color.
+
+Returns a `Dictionary` associating each unique color vector obtained from [`get_deterministic_color_order`](@ref) to the ordering color. 
+"""
+function get_color_illumination_order(N; lattice_type = :triangular)
+	F = generate_F_reuse_matrix(N;lattice_type)
+	vec = get_deterministic_color_order(N; lattice_type)
+	get_color_illumination_order(F, vec), F
+end
+
+# ╔═╡ 0f605f2c-029b-4af8-8e52-2c7bc4c7626a
+#=╠═╡ notebook_exclusive
+get_color_illumination_order(4; lattice_type = :square)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f97bb119-0248-4782-8cf9-cca61a666dbf
+#=╠═╡ notebook_exclusive
+let
+	lattice_type = :triangular
+	cdict, F = get_color_illumination_order(64; lattice_type)
+	order = sort(cdict) |> x -> Dictionary(x.values, x.indices.values)
+	pts = map(i -> order[i],1:n5)
+	outline = scatter(
+		[SA[0,0],F[:,1], F*SA[1,1], F[:,2], SA[0,0]];
+		mode = "lines",
+		line_color = "black",
+	)
+	data = [
+		outline,
+		scatter(pts; mode = "markers"),
+	]
+	Plot(data)
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ de86f516-b65a-445e-8988-4cfc9dafd000
+#=╠═╡ notebook_exclusive
+FFF = generate_F_reuse_matrix(NNN; lattice_type = :triangular)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 7f4b9a79-ce48-487f-be37-d884ee9db0e9
+#=╠═╡ notebook_exclusive
+dio = get_color_illumination_order(FFF, fffvec)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 39820d4a-d05f-4dbc-8d6d-7e20b579688c
+#=╠═╡ notebook_exclusive
+dio.indices.values
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 7bbafd36-6130-4f00-ac86-63b2bc467b77
+#=╠═╡ notebook_exclusive
+idio = sort(dio) |> x->Dictionary(x.values, x.indices.values)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 2a45ea3b-ea3e-4d5e-912d-36b0055cf307
+#=╠═╡ notebook_exclusive
+new_color_order(1, dio, FFF)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 759d6fd6-9649-4bea-b088-1cae1647ad3d
+#=╠═╡ notebook_exclusive
+map(x -> mod(x + SA[2, -2], FFF), idio)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 39948c5f-d472-48ce-8385-1c67b8f1580a
+#=╠═╡ notebook_exclusive
+md"""
+## get\_L
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ f5f5a045-1c9b-40b8-b326-7d0e1336412c
+"""
+$TYPEDSIGNATURES
+Get the lattice generating matrix as a function of the `lattice_type` and of the lattice `spacing`.
+
+`lattice_type` has to be either `:triangular` or `:square`
+"""
+function get_L(spacing; lattice_type = :triangular)
+	@assert lattice_type ∈ (:triangular, :square) "`lattice_type` has to be either `:triangular` or `:square`"
+	if lattice_type === :triangular
+		return SA[1 1/2;0 √3/2] * spacing
+	else
+		return SA[1 0;0 1] * spacing
+	end
+end
+
+# ╔═╡ cd9ee96f-91a9-43cf-980c-6253a0c6018f
+#=╠═╡ notebook_exclusive
+md"""
+## generate\_colors
+"""
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 16614e6a-2ef0-4b36-913d-6fd19440b60b
+asdf = let
+	N = 4
+	CD, F = get_color_illumination_order(N; lattice_type = :triangular)
+	spacing = .5
+	BC = generate_hex_lattice(spacing; M = 100)
+	L = spacing * SA[1 1/2; 0 √3/2]
+	(BC, CD, L, F)
+end
+
+# ╔═╡ d3e49592-cee0-4414-9b92-ce2fb66529df
+"""
+$TYPEDSIGNATURES
+Provide a the coloring breakdown for a given set of lattice points.
+# Arguments
+- `BeamCenters` → Array of SVector{2,<:Number} points identifying the beam lattice centers
+- `colordict` → Dictionary of the optimal color order for the given coloring scheme, obtained using [`get_color_illumination_order`](@ref)
+- `L` → Beam Lattice generating matrix, function of the beam spacing and lattice type and obtained using [`get_L`](@ref)
+- `F` → Color Lattice generating matrix, function of the number of colors and beam lattice type and obtained using [`generate_F_reuse_matrix`](@ref)
+# Keyword Arguments
+- `first_color_idx` → Provide the index of the point in BeamCenters that should be associated with color 1.
+- `first_color_coord` → Provide the coordinates of the point that should be associated with color 1, if both coord and idx are provided, the idx is ignored. Defaults to the giving color 1 to the point in (0,0).
+
+# Note
+The colors are ordered in such a way that if illuminating the colors in sequential order, the next color is always the one that has the maximum minimum distance with points of the previoulsy illuminated colors (so the one most likely to create lower interference).
+"""
+function generate_colors(BeamCenters, colordict, L, F; first_color_idx = nothing, first_color_coord = first_color_idx === nothing ? zero(eltype(BeamCenters)) : BeamCenters[first_color_idx])
+	map(BeamCenters) do p
+		T = SVector{2, Int}
+		# Find the integer lattice representation
+		l = inv(L)*(p - first_color_coord)
+		# For some reason doing broadcast round would allocate
+		v = SA[round(Int,l[1]), round(Int,l[2])]
+		# Get the resulting color based on the modulo value of l w.r.t F
+		color = colordict[mod(v,F)]
+	end
+end;
 
 # ╔═╡ 7e68054e-4268-424e-b413-ef18baf832ac
 """
@@ -303,6 +783,10 @@ function generate_colors(BeamCenters::AbstractVector,N_Colours::Int=4;first_colo
      [2]   P. Angeletti, "Simple implementation of vectorial modulo operation based
            on fundamental parallelepiped," in Electronics Letters, vol. 48, no. 3, pp. 159-160,
            February 2 2012. doi: 10.1049/el.2011.3667
+     [3]   L. Xiao, X.  -G. Xia and Y. -P. Wang, "Exact and Robust
+           Reconstructions of Integer Vectors Based on Multidimensional Chinese
+           Remainder Theorem (MD-CRT)," in IEEE Transactions on Signal Processing,
+           vol. 68, pp. 5349-5364, 2020, doi: 10.1109/TSP.2020.3023584
 
      Authors: Alberto Mengali, 2020, European Space Agency
 
@@ -315,15 +799,13 @@ function generate_colors(BeamCenters::AbstractVector,N_Colours::Int=4;first_colo
     =#
 
     # Check if either the first color coordinates or first color idx are given
-    if first_color_coord === nothing
-        if first_color_idx === nothing
-            # Initialize to coorinates of the first beam
-            first_color_idx = 1;
-        end
-        first_color_coord = BeamCenters[first_color_idx]
-    else
+    if first_color_coord !== nothing
         if first_color_idx !== nothing
             @warn "Both first_color_idx and first_color_coord were given, disregarding the idx variable"
+        end
+        first_color_idx = findfirst(x -> x == first_color_coord, BeamCenters)
+        if first_color_idx === nothing
+          error("The provided `first_color_coord` $(first_color_coord) is not part of the beam centers vector")
         end
     end
     if lattice_type ∉ (:triangular, :square)
@@ -353,7 +835,7 @@ function generate_colors(BeamCenters::AbstractVector,N_Colours::Int=4;first_colo
         D = @SMatrix [1 0;0 1]
     end
     # Get the coloring generating matrix
-    F_reuse_matrix = generate_F_reuse_matrix(lattice_type,N_Colours)
+    F_reuse_matrix = generate_F_reuse_matrix(N_Colours;lattice_type)
     # Create the set that will contain the unique results
     unique_colors_vecs = SVector{2,Int}[]
     # Initialize the colors vector
@@ -375,16 +857,103 @@ function generate_colors(BeamCenters::AbstractVector,N_Colours::Int=4;first_colo
         end
         Colors[n] = cidx
     end
+
+    if first_color_idx !== nothing
+      # Reshuffle the colors in order to have first_color_idx as color number 1
+      ref_col = Colors[first_color_idx]
+      @inbounds @simd for n ∈ eachindex(Colors)
+        c = Colors[n]
+        Colors[n] = mod(c - ref_col,N_Colours) + 1
+      end
+    end
+
     
     return Colors
-end
+end;
 
 # ╔═╡ d8584d03-8eb4-4864-b646-a6a0656a2e12
 begin
 	export generate_regular_lattice, generate_square_lattice, generate_hex_lattice, generate_rect_lattice
 	export generate_colors
 	export f2λ, λ2f, db2lin, lin2db
+	export get_color_illumination_order, get_L, new_color_order
 end
+
+# ╔═╡ 66417309-8d6d-47e9-b5ef-7fcc0cde9194
+function plot_illumination(n, N, spacing; lattice_type = :triangular)
+	cdict, F = get_color_illumination_order(N; lattice_type)
+	# Get the max colors
+	plotly_colors = PlutoUtils.color_order_64
+	# Generate the lattice of the beams
+	p = generate_hex_lattice(spacing; M = round(Int, 5/spacing))
+	# Find the lattice generating matrix
+	L = get_L(spacing; lattice_type)
+	# Find the colors
+	colors = generate_colors(p, cdict, L, F)
+	order = group(i -> colors[i], 1:length(p))
+	data = @views map(1:n) do i
+		pts = p[order[i]]
+		scatter(pts;mode = "markers", marker_color = plotly_colors[i], showlegend = false)
+	end
+	Plot(data)
+end	
+
+# ╔═╡ ba3660ba-e274-4e11-9fd1-75aafbb0a776
+#=╠═╡ notebook_exclusive
+let
+	n = n4
+	Nmax = N4 .^ [1 2 3]
+	spacing = [1 .5 .25]
+	P = map(Nmax, spacing) do N,sp
+		plot_illumination(min(n, N), N, sp)
+	end
+	vcat(P...)
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 47ffd006-29b2-4774-a791-11b3f88a7aba
+#=╠═╡ notebook_exclusive
+let n = n6, spacing = .5
+	N = 16
+	lattice_type = :triangular
+	cdict, F = get_color_illumination_order(N; lattice_type)
+	# Get the max colors
+	plotly_colors = PlutoUtils.color_order_64
+	# Generate the lattice of the beams
+	p = generate_hex_lattice(spacing; M = round(Int, 5/spacing))
+	# Find the lattice generating matrix
+	L = get_L(spacing; lattice_type)
+	# Find the colors
+	colors = generate_colors(p, cdict, L, F)
+	order = group(i -> colors[i], 1:length(p))
+	corder = new_color_order(nc, cdict, F)
+	data = @views map(corder[1:n]) do i
+		pts = p[order[i]]
+		scatter(pts;mode = "markers", marker_color = plotly_colors[i], showlegend = false)
+	end
+	Plot(data)
+end	
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ c2a099fb-446c-4a39-b505-973223c38a27
+#=╠═╡ notebook_exclusive
+let
+	N = 4
+	lattice_type = :triangular
+	lat = lattice_type === :square ? generate_square_lattice : generate_hex_lattice
+	CD, F = get_color_illumination_order(N; lattice_type)
+	spacing = 1
+	BC = lat(spacing; M = 10)
+	L = get_L(spacing; lattice_type)
+	colors = generate_colors(BC, CD, L, F; first_color_coord = SA[-1/2,√3/2])
+	# colors = generate_colors(BC, N; lattice_type)
+	data = scatter(BC; mode = "markers", marker = attr(
+		color = colors, 
+		colorscale = predefined_colorscale(N),
+	))
+	Plot(data)
+end
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 8160086a-6349-447c-87ae-880b02fa97f5
 #=╠═╡ notebook_exclusive
@@ -419,17 +988,23 @@ end
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Dictionaries = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 PlutoUtils = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+SplitApplyCombine = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 BenchmarkTools = "~1.2.0"
+Dictionaries = "~0.3.15"
 DocStringExtensions = "~0.8.6"
 PlotlyBase = "~0.8.18"
-PlutoUtils = "~0.4.13"
+PlutoUtils = "~0.5.5"
+Revise = "~3.1.20"
+SplitApplyCombine = "~1.2.0"
 StaticArrays = "~1.2.13"
 """
 
@@ -442,9 +1017,9 @@ manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
-git-tree-sha1 = "0bc60e3006ad95b4bb7497698dd7c6d649b9bc06"
+git-tree-sha1 = "abb72771fd8895a7ebd83d5632dc4b989b022b5b"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -465,6 +1040,12 @@ version = "1.2.0"
 git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
 uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
 version = "0.4.8"
+
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "9aa8a5ebb6b5bf469a7e0e2b5202cf6f8c291104"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "1.0.6"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "Colors", "FixedPointNumbers", "Random"]
@@ -510,6 +1091,16 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 [[deps.DelimitedFiles]]
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+
+[[deps.Dictionaries]]
+deps = ["Indexing", "Random"]
+git-tree-sha1 = "43ae37eac34e76ac97d1a7db28561243e7242461"
+uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
+version = "0.3.15"
+
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -558,6 +1149,11 @@ git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
 uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.2"
 
+[[deps.Indexing]]
+git-tree-sha1 = "ce1566720fd6b19ff3411404d4b977acd4814f9f"
+uuid = "313cdc1a-70c2-5d6a-ae34-0150d3930a38"
+version = "1.1.1"
+
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -572,6 +1168,12 @@ deps = ["Dates", "Mmap", "Parsers", "Unicode"]
 git-tree-sha1 = "8076680b162ada2a031f707ac7b4953e30667a37"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.2"
+
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "e273807f38074f033d94207a201e6e827d8417db"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.8.21"
 
 [[deps.LaTeXStrings]]
 git-tree-sha1 = "f2355693d6778a178ade15952b7ac47a4ff97996"
@@ -603,6 +1205,12 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.LoweredCodeUtils]]
+deps = ["JuliaInterpreter"]
+git-tree-sha1 = "491a883c4fef1103077a7f648961adbf9c8dd933"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "2.1.2"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -659,34 +1267,22 @@ uuid = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 version = "0.8.18"
 
 [[deps.PlutoDevMacros]]
-deps = ["MacroTools", "PlutoHooks"]
-git-tree-sha1 = "7392720177703062cb2e2a0115efb77dc5dc818c"
+deps = ["MacroTools", "Requires"]
+git-tree-sha1 = "f5cbbcaa26fe68fd63bc25f5a9e626b7f0e515b0"
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.3.7"
-
-[[deps.PlutoHooks]]
-deps = ["FileWatching", "InteractiveUtils", "Markdown", "UUIDs"]
-git-tree-sha1 = "f297787f7d7507dada25f6769fe3f08f6b9b8b12"
-uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
-version = "0.0.3"
-
-[[deps.PlutoTest]]
-deps = ["HypertextLiteral", "InteractiveUtils", "Markdown", "Test"]
-git-tree-sha1 = "92b8ae1eee37c1b8f70d3a8fb6c3f2d81809a1c5"
-uuid = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
-version = "0.2.0"
+version = "0.4.4"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
-git-tree-sha1 = "e071adf21e165ea0d904b595544a8e514c8bb42c"
+git-tree-sha1 = "b68904528fd538f1cb6a3fbc44d2abdc498f9e8e"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.19"
+version = "0.7.21"
 
 [[deps.PlutoUtils]]
-deps = ["Chain", "Glob", "HypertextLiteral", "InteractiveUtils", "Markdown", "PlutoDevMacros", "PlutoHooks", "PlutoTest", "PlutoUI", "PrettyTables", "Reexport", "Requires", "UUIDs"]
-git-tree-sha1 = "3d3856ecfea340b4ee0c77e5c3228dd1b4478ae1"
+deps = ["Chain", "Colors", "DocStringExtensions", "Glob", "HypertextLiteral", "OrderedCollections", "PlutoDevMacros", "PlutoUI", "PrettyTables", "Reexport", "Requires", "StaticArrays", "UUIDs"]
+git-tree-sha1 = "27589f8f79b24c096e92520b03cdab764d2b6a88"
 uuid = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
-version = "0.4.13"
+version = "0.5.5"
 
 [[deps.PrettyTables]]
 deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
@@ -721,6 +1317,12 @@ git-tree-sha1 = "4036a3bd08ac7e968e27c203d45f5fff15020621"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.1.3"
 
+[[deps.Revise]]
+deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
+git-tree-sha1 = "41deb3df28ecf75307b6e492a738821b031f8425"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.1.20"
+
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
@@ -733,6 +1335,12 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 [[deps.SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[deps.SplitApplyCombine]]
+deps = ["Dictionaries", "Indexing"]
+git-tree-sha1 = "dec0812af1547a54105b4a6615f341377da92de6"
+uuid = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
+version = "1.2.0"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
@@ -799,11 +1407,12 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 # ╔═╡ Cell order:
 # ╟─379613ec-0973-4000-ae8c-d7c33ddca18e
-# ╠═74975885-9a4e-4857-8135-9e4f69061caf
 # ╠═c0a30957-4c7b-4d7b-bfa9-c2fb691a077b
+# ╠═74975885-9a4e-4857-8135-9e4f69061caf
 # ╠═736b0cf6-bec2-4226-8ef4-70f6a865d34a
 # ╟─f8243a65-9f5e-464e-bb06-0bb4f5131b8b
 # ╠═d8584d03-8eb4-4864-b646-a6a0656a2e12
+# ╠═7f645e69-3334-44db-9ba1-9f2d3e0127a2
 # ╟─8660a7c4-eb78-4e7c-966b-d759df7f3dfa
 # ╟─71163795-9695-4f11-acc2-6e3838c8a158
 # ╠═f8a53711-e07f-4b6b-84ea-803679496571
@@ -824,10 +1433,59 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═b2e80c33-bbfe-43ca-8795-c9d8d6fa52a9
 # ╠═9165c4d4-69b5-456c-813c-4725feeb5b52
 # ╟─a5ca5a8a-8497-41e2-9af0-92db5db9ce73
+# ╟─0ddf072d-009d-42f2-9a8f-f69fbab750c6
+# ╟─5db224d4-7379-4c8f-bcee-9cf00011d286
+# ╠═5f62c7d2-ebfb-43e6-b9e3-06ca78c99390
+# ╠═6107a3dc-26dd-4a0d-aeff-5eca2cd1dcd4
+# ╠═0d33b162-cc06-4c3b-8ade-5b40106dec0e
+# ╠═a7037a49-c2cb-48b6-bbf9-ca8150afcfbe
+# ╠═259ea307-2862-42f3-866a-be8f4eb83cf3
+# ╟─063db114-1b95-47d8-8f8b-26eaff8f9574
+# ╠═8d4eb806-8af1-4127-8f72-6dd68f810eb5
+# ╟─d175246c-552a-4f0f-8415-2339e9af833c
+# ╠═087730c6-cf72-4133-8064-d5619ea4b188
+# ╟─745bb1c1-a312-4dbd-a29f-0836b7dbe8a7
+# ╠═e6033b3e-51fa-4eeb-87ff-e5b5359aebc5
+# ╠═272234bf-ea90-4d24-b5f4-1cd6cdaea20b
+# ╟─76275b93-5668-4ac9-a6a2-2f4b30ca8ab3
+# ╠═6579518a-2130-4e25-b4eb-966e60203f17
+# ╠═9ccf08d4-2ffb-4f36-a632-3b0ed4017d92
+# ╠═41817b1f-4c5e-4a55-93b7-520d6b71ea9c
+# ╠═0f605f2c-029b-4af8-8e52-2c7bc4c7626a
+# ╠═ca09052d-1fce-422d-9205-ae4e87dc4db4
+# ╠═f700edf6-0c44-4507-bbf5-4c5dc02fa74c
+# ╠═de86f516-b65a-445e-8988-4cfc9dafd000
+# ╠═5da650b5-9309-418b-92d9-3388b5385e9b
+# ╠═7f4b9a79-ce48-487f-be37-d884ee9db0e9
+# ╠═39820d4a-d05f-4dbc-8d6d-7e20b579688c
+# ╠═2a45ea3b-ea3e-4d5e-912d-36b0055cf307
+# ╠═7bbafd36-6130-4f00-ac86-63b2bc467b77
+# ╠═759d6fd6-9649-4bea-b088-1cae1647ad3d
+# ╠═019c9ab2-ef2b-4677-a5aa-d0363fffef72
+# ╠═f97bb119-0248-4782-8cf9-cca61a666dbf
+# ╠═cffd2b81-66c1-4f50-948c-e38ec011105d
+# ╠═7785e6b1-881e-4088-82fe-3dad106b07be
+# ╠═ba3660ba-e274-4e11-9fd1-75aafbb0a776
+# ╠═66417309-8d6d-47e9-b5ef-7fcc0cde9194
+# ╠═9cd5609b-1e58-4d39-87ab-b3d7542de691
+# ╠═47ffd006-29b2-4774-a791-11b3f88a7aba
+# ╟─89888da7-4912-4557-a375-0150f80ee703
+# ╠═f942e39c-0d93-4bc8-8ff2-112fed566014
+# ╟─df0602a2-d278-4fae-9957-30c85b55598a
+# ╠═a86b2ff6-1967-424f-86eb-40fb4288c8b5
 # ╠═3f2a31d4-0fa8-40fa-9dc4-bd6a26d2ddc9
+# ╟─dbef7000-7c39-49f7-b24e-f0fb436eb54e
 # ╠═14cb2a0b-2ea8-471b-987f-1647f1516992
+# ╟─9183aa40-9dc1-4237-8bf5-de42c93b149f
 # ╠═6b9beb62-dc7e-4b8b-9b7c-8fee5b1da98f
+# ╟─1155e836-99d0-4cc8-83d0-355a6ab6fcc0
 # ╠═1d44cf1c-11a5-4366-94f3-85b695c6ca12
+# ╟─39948c5f-d472-48ce-8385-1c67b8f1580a
+# ╠═f5f5a045-1c9b-40b8-b326-7d0e1336412c
+# ╟─cd9ee96f-91a9-43cf-980c-6253a0c6018f
+# ╠═16614e6a-2ef0-4b36-913d-6fd19440b60b
+# ╠═d3e49592-cee0-4414-9b92-ce2fb66529df
+# ╠═c2a099fb-446c-4a39-b505-973223c38a27
 # ╠═7e68054e-4268-424e-b413-ef18baf832ac
 # ╟─8160086a-6349-447c-87ae-880b02fa97f5
 # ╠═3ea0415c-af14-430c-bf7c-2c7d71b7a333
