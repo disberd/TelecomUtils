@@ -392,7 +392,7 @@ end
 # ╔═╡ ee657a11-c976-4128-8bb4-2336a5ecd319
 #=╠═╡ notebook_exclusive
 # We test that a non-visible point is nan
-@test get_era(SatView(LLA(0,0,600km),em),LLA(1°,105°,0)) |> isnan
+@test get_era(SatView(LLA(0,0,600km),em),LLA(40°,-39°,0)) |> isnan
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 2ad13505-0c60-4ccb-b536-e865c24a0396
@@ -538,7 +538,7 @@ Unitful = "~1.9.2"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.0-rc2"
+julia_version = "1.7.0-rc1"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
@@ -956,7 +956,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.Random]]
-deps = ["SHA", "Serialization"]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.Ratios]]

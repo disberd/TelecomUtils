@@ -502,7 +502,7 @@ Unitful = "~1.9.2"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.0-rc2"
+julia_version = "1.7.0-rc1"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
@@ -854,7 +854,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.Random]]
-deps = ["SHA", "Serialization"]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.Ratios]]
@@ -1041,7 +1041,7 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═7344190c-7989-4b55-b7be-357f7d6b7370
 # ╟─11938cb6-46b3-0001-96c0-ef6424d1d0db
 # ╟─11938cb6-46b3-0002-96c0-ef6424d1d0db
-# ╟─11938cb6-46b3-0003-96c0-ef6424d1d0db
+# ╠═11938cb6-46b3-0003-96c0-ef6424d1d0db
 # ╟─11938cb6-46b3-499b-96c0-ef6424d1d0db
 # ╟─d2c248b1-c48e-437b-a910-edcc59b4424f
 # ╠═7b306ed5-4bda-465d-abf2-4d07cb4642c1

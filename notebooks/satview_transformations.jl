@@ -326,8 +326,10 @@ begin
 	"""
 @inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)::RotMatrix3{Float64}
 		# Precompute the sines and cosines
-		sλ, cλ = sincos(lat)
-		sφ, cφ = sincos(lon)
+		# sλ, cλ = sincos(lat)
+		# sφ, cφ = sincos(lon)
+		sλ, cλ = sincos(lon)
+		sφ, cφ = sincos(lat)
 		
 		# Generate the rotation matrix as a StaticArray
 		return SA_F64[
@@ -344,14 +346,21 @@ begin
 	# Define the relevant rotation matrix
 		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)::RotMatrix3{Float64}
 		# Precompute the sines and cosines
-		sλ, cλ = sincos(lat)
-		sφ, cφ = sincos(lon)
+		# sλ, cλ = sincos(lat)
+		# sφ, cφ = sincos(lon)
+		sλ, cλ = sincos(lon)
+		sφ, cφ = sincos(lat)
 		
 		# Generate the rotation matrix as a StaticArray
+		# return SA_F64[
+		# 	 sφ -sλ*cφ -cλ*cφ
+		# 	-cφ -sλ*sφ -cλ*sφ
+		# 	 0   cλ    -sλ
+		# 	] |> RotMatrix
 		return SA_F64[
-			 sφ -sλ*cφ -cλ*cφ
-			-cφ -sλ*sφ -cλ*sφ
-			 0   cλ    -sλ
+			 sλ -cλ*sφ -cλ*cφ
+			-cλ -sλ*sφ -sλ*cφ
+			 0   cφ    -sφ
 			] |> RotMatrix
 	end
 	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
@@ -790,7 +799,7 @@ Unitful = "~1.9.2"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.0-rc2"
+julia_version = "1.7.0-rc1"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
@@ -1208,7 +1217,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.Random]]
-deps = ["SHA", "Serialization"]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.Ratios]]
