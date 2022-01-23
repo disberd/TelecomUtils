@@ -326,16 +326,15 @@ begin
 	"""
 @inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)::RotMatrix3{Float64}
 		# Precompute the sines and cosines
-		# sλ, cλ = sincos(lat)
-		# sφ, cφ = sincos(lon)
 		sλ, cλ = sincos(lon)
 		sφ, cφ = sincos(lat)
 		
 		# Generate the rotation matrix as a StaticArray
+		# Rotation matrix ECEF -> ENU [https://gssc.esa.int/navipedia/index.php/Transformations_between_ECEF_and_ENU_coordinates]
 		return SA_F64[
 			-sλ      cλ      0
-			-sφ*cλ  -sφ*sλ   cφ
-			 cφ*cλ   cφ*sλ   sφ
+			-cλ*sφ  -sλ*sφ   cφ
+			 cλ*cφ   sλ*cφ   sφ
 			] |> RotMatrix
 	end
 	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
@@ -346,17 +345,11 @@ begin
 	# Define the relevant rotation matrix
 		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)::RotMatrix3{Float64}
 		# Precompute the sines and cosines
-		# sλ, cλ = sincos(lat)
-		# sφ, cφ = sincos(lon)
 		sλ, cλ = sincos(lon)
 		sφ, cφ = sincos(lat)
 		
 		# Generate the rotation matrix as a StaticArray
-		# return SA_F64[
-		# 	 sφ -sλ*cφ -cλ*cφ
-		# 	-cφ -sλ*sφ -cλ*sφ
-		# 	 0   cλ    -sλ
-		# 	] |> RotMatrix
+		# Rotation matrix WND -> ECEF [mod NED -> ECEF matrix from "Global Positioning Systems, Inertial Navigation, and Integration, 2nd Ed.", Mohinder, p.472]
 		return SA_F64[
 			 sλ -cλ*sφ -cλ*cφ
 			-cλ -sλ*sφ -sλ*cφ

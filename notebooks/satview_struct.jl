@@ -25,6 +25,7 @@ begin
 	using BenchmarkTools
 	using PlutoTest
 	using PlutoUtils
+	using PlotlyBase
 	using PlutoDevMacros
 end
   ╠═╡ notebook_exclusive =#
@@ -392,18 +393,104 @@ end
 # ╔═╡ ee657a11-c976-4128-8bb4-2336a5ecd319
 #=╠═╡ notebook_exclusive
 # We test that a non-visible point is nan
-@test get_era(SatView(LLA(0,0,600km),em),LLA(40°,-39°,0)) |> isnan
+@test get_era(SatView(LLA(0,0,700km),em),LLA(40°,-39°,0)) |> isnan
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 2ad13505-0c60-4ccb-b536-e865c24a0396
 #=╠═╡ notebook_exclusive
-# We test that a non-visible point is nan
+# We test that a visible point is not nan
 @test get_era(SatView(LLA(0,0,600km),em),LLA(0,0,500km)) ≈ ERA(90°, 100km, 0°)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 97c3ab73-5d2b-4871-aaa2-f8d7f1a7204d
 #=╠═╡ notebook_exclusive
 @benchmark get_era($sv,LLA(0,0,0))
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 80b5256d-e3f1-4329-be97-34e557377466
+function meshgrid(xin,yin)
+	nx=length(xin)
+	ny=length(yin)
+	xout=zeros(ny,nx)
+	yout=zeros(ny,nx)
+	for jx=1:nx
+	    for ix=1:ny
+	        xout[ix,jx]=xin[jx]
+	        yout[ix,jx]=yin[ix]
+	    end
+	end
+	return xout,yout
+end;
+
+# ╔═╡ bbf6f990-40b3-471f-a46c-61f5fd6f5824
+# Visual Test ERA
+begin
+	earthmodel = EarthModel()
+	svTest = SatView(LLA(0,0,700km),earthmodel)
+	gridRes = 0.5
+	x_plot = -180:gridRes:180
+	y_plot = -90:gridRes:90
+
+	lonMesh,latMesh = meshgrid(-180:gridRes:180,-90:gridRes:90)
+	el_plot = fill(NaN,size(lonMesh,1),size(lonMesh,2))
+	az_plot = fill(NaN,size(lonMesh,1),size(lonMesh,2))
+	r_plot = fill(NaN,size(lonMesh,1),size(lonMesh,2))
+	for row = 1:size(latMesh,1)
+		for col = 1:size(latMesh,2)
+			era = get_era(svTest,LLA(latMesh[row,col]*π/180,lonMesh[row,col]*π/180,0))
+			el_plot[row,col] = rad2deg(era.el)
+			az_plot[row,col] = rad2deg(era.az)
+			r_plot[row,col] = era.r
+		end
+	end
+end
+
+# ╔═╡ 74b99a07-9e73-4532-a50d-10221c47f324
+#=╠═╡ notebook_exclusive
+let
+	el_plot = heatmap(
+		x = x_plot,
+		y = y_plot,
+		z = el_plot
+	)
+	
+	Plot(el_plot, Layout(
+					yaxis_title = "LAT",
+					xaxis_title = "LON",
+					title = "Elevation Test"))
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 1c0aa81c-efa2-4ba4-a3b2-70276d76c4f1
+#=╠═╡ notebook_exclusive
+let
+	az_plot = heatmap(
+		x = x_plot,
+		y = y_plot,
+		z = az_plot
+	)
+	
+	Plot(az_plot, Layout(
+					yaxis_title = "LAT",
+					xaxis_title = "LON",
+					title = "Azimuth Test"))
+end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5023b71d-219e-4f2f-b319-e9899e9702ac
+#=╠═╡ notebook_exclusive
+let
+	r_plot = heatmap(
+		x = x_plot,
+		y = y_plot,
+		z = r_plot
+	)
+	
+	Plot(r_plot, Layout(
+					yaxis_title = "LAT",
+					xaxis_title = "LON",
+					title = "Range Test"))
+end
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 64370881-a469-4748-97c5-ec27199d529b
@@ -510,6 +597,7 @@ CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
 PlutoTest = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
 PlutoUtils = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
@@ -524,6 +612,7 @@ BenchmarkTools = "~1.2.0"
 CoordinateTransformations = "~0.6.2"
 DocStringExtensions = "~0.8.6"
 Parameters = "~0.12.3"
+PlotlyBase = "~0.8.18"
 PlutoDevMacros = "~0.3.10"
 PlutoTest = "~0.2.0"
 PlutoUtils = "~0.4.13"
@@ -602,6 +691,24 @@ git-tree-sha1 = "9a1d594397670492219635b35a3d830b04730d62"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 version = "0.1.1"
 
+[[deps.ColorSchemes]]
+deps = ["ColorTypes", "Colors", "FixedPointNumbers", "Random"]
+git-tree-sha1 = "6b6f04f93710c71550ec7e16b650c1b9a612d0b6"
+uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
+version = "3.16.0"
+
+[[deps.ColorTypes]]
+deps = ["FixedPointNumbers", "Random"]
+git-tree-sha1 = "024fe24d83e4a5bf5fc80501a314ce0d1aa35597"
+uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
+version = "0.11.0"
+
+[[deps.Colors]]
+deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
+git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
+uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
+version = "0.12.8"
+
 [[deps.Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "SHA", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "dce3e3fea680869eaa0b774b2e8343e9ff442313"
@@ -675,6 +782,12 @@ version = "1.11.2"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
+[[deps.FixedPointNumbers]]
+deps = ["Statistics"]
+git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
+uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
+version = "0.8.4"
 
 [[deps.Formatting]]
 deps = ["Printf"]
@@ -759,6 +872,11 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "d735490ac75c5cb9f1b00d8b5509c11984dc6943"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
 version = "2.1.0+0"
+
+[[deps.LaTeXStrings]]
+git-tree-sha1 = "f2355693d6778a178ade15952b7ac47a4ff97996"
+uuid = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+version = "1.3.0"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -883,6 +1001,12 @@ version = "2.1.2"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+
+[[deps.PlotlyBase]]
+deps = ["ColorSchemes", "Dates", "DelimitedFiles", "DocStringExtensions", "JSON", "LaTeXStrings", "Logging", "Parameters", "Pkg", "REPL", "Requires", "Statistics", "UUIDs"]
+git-tree-sha1 = "180d744848ba316a3d0fdf4dbd34b77c7242963a"
+uuid = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
+version = "0.8.18"
 
 [[deps.PlutoDevMacros]]
 deps = ["MacroTools", "PlutoHooks"]
@@ -1162,6 +1286,11 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═ee657a11-c976-4128-8bb4-2336a5ecd319
 # ╠═2ad13505-0c60-4ccb-b536-e865c24a0396
 # ╠═97c3ab73-5d2b-4871-aaa2-f8d7f1a7204d
+# ╠═bbf6f990-40b3-471f-a46c-61f5fd6f5824
+# ╟─74b99a07-9e73-4532-a50d-10221c47f324
+# ╟─1c0aa81c-efa2-4ba4-a3b2-70276d76c4f1
+# ╟─5023b71d-219e-4f2f-b319-e9899e9702ac
+# ╠═80b5256d-e3f1-4329-be97-34e557377466
 # ╟─64370881-a469-4748-97c5-ec27199d529b
 # ╠═2efb01b8-16b1-4186-94f4-cdfbca1310de
 # ╠═e0915eab-a53d-4fb2-9029-83793073ac3c
