@@ -1,8 +1,8 @@
 ### A Pluto.jl notebook ###
-# v0.16.0
+# v0.17.7
 
-using Markdown
-using InteractiveUtils
+# using Markdown
+# using InteractiveUtils
 
 # ╔═╡ 590cdbce-fc45-11eb-2fde-1d27628251b7
 begin
@@ -115,61 +115,11 @@ md"""
 # Generic definition, the @inline here was necessary to avoid allocations, see https://discourse.julialang.org/t/dispatch-on-value-allocating/26337/11
 @inline _rotation_matrix(s::Symbol,lat,lon) = _rotation_matrix(Val(s),lat,lon)
 
-# ╔═╡ 3179c657-aa27-4465-8a90-51ec991701c8
-begin
-	"""
-	_rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
-	
-	Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
-	"""
-@inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
-		# Precompute the sines and cosines
-		sλ, cλ = sincos(lat)
-		sφ, cφ = sincos(lon)
-		
-		# Generate the rotation matrix as a StaticArray
-		return SA_F64[
-			-sλ      cλ      0
-			-sφ*cλ  -sφ*sλ   cφ
-			 cφ*cλ   cφ*sλ   sφ
-			] |> RotMatrix
-	end
-	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon) = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
-end
-
 # ╔═╡ e925d962-e6fb-464e-8686-3fa18bc2342b
 #=╠═╡ notebook_exclusive
 md"""
 ### Satellite-Centric
 """
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 43a98a86-f0ba-4b99-b808-1e698b44a202
-begin
-	# Define the relevant rotation matrix
-		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)
-		# Precompute the sines and cosines
-		sλ, cλ = sincos(lat)
-		sφ, cφ = sincos(lon)
-		
-		# Generate the rotation matrix as a StaticArray
-		return SA_F64[
-			 sφ -sλ*cφ -cλ*cφ
-			-cφ -sλ*sφ -cλ*sφ
-			 0   cλ    -sλ
-			] |> RotMatrix
-	end
-	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon) = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
-end
-
-# ╔═╡ 3d630992-f6f5-4af2-beea-171428580037
-#=╠═╡ notebook_exclusive
-@test _rotation_matrix(Val(:ENUfromECEF),0°,60°) == SA_F64[0 1 0;-√3/2 0 1/2;1/2 0 √3/2]
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 5c450408-fa09-4325-b4f1-422ff7f77b30
-#=╠═╡ notebook_exclusive
-@test _rotation_matrix(Val(:ENUfromECEF),60°,0°) == SA_F64[-√3/2 1/2 0;0 0 1;1/2 √3/2 0]
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 9c97dbf0-e546-4b39-8234-9d3faa8ac0b2
@@ -663,6 +613,56 @@ function (::UVfromThetaPhi)(θφ::StaticVector{2,T}) where T
 end
 end
 
+# ╔═╡ 3179c657-aa27-4465-8a90-51ec991701c8
+begin
+	"""
+	_rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
+	
+	Compute the rotation matrix to compute the tropocentric coordinates with tropocentric origin in the point located at geodetic coordinates `lat` and `lon` expressed in radians or Unitful Angles (both `rad` and `°`)
+	"""
+@inline	function _rotation_matrix(::Union{Val{:ENUfromECEF},Val{:ERAfromECEF}},lat,lon)
+		# Precompute the sines and cosines
+		sλ, cλ = sincos(lat)
+		sφ, cφ = sincos(lon)
+		
+		# Generate the rotation matrix as a StaticArray
+		return SA_F64[
+			-sλ      cλ      0
+			-sφ*cλ  -sφ*sλ   cφ
+			 cφ*cλ   cφ*sλ   sφ
+			] |> RotMatrix
+	end
+	_rotation_matrix(::Union{Val{:ECEFfromENU},Val{:ECEFfromERA}},lat,lon) = inv(_rotation_matrix(Val(:ENUfromECEF),lat,lon))
+end
+
+# ╔═╡ 43a98a86-f0ba-4b99-b808-1e698b44a202
+begin
+	# Define the relevant rotation matrix
+		function _rotation_matrix(::Union{Val{:ECEFfromUV},Val{:ECEFfromWND},Val{:LLAfromUV}},lat,lon)
+		# Precompute the sines and cosines
+		sλ, cλ = sincos(lat)
+		sφ, cφ = sincos(lon)
+		
+		# Generate the rotation matrix as a StaticArray
+		return SA_F64[
+			 sφ -sλ*cφ -cλ*cφ
+			-cφ -sλ*sφ -cλ*sφ
+			 0   cλ    -sλ
+			] |> RotMatrix
+	end
+	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon) = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
+end
+
+# ╔═╡ 3d630992-f6f5-4af2-beea-171428580037
+#=╠═╡ notebook_exclusive
+@test _rotation_matrix(Val(:ENUfromECEF),0°,60°) == SA_F64[0 1 0;-√3/2 0 1/2;1/2 0 √3/2]
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 5c450408-fa09-4325-b4f1-422ff7f77b30
+#=╠═╡ notebook_exclusive
+@test _rotation_matrix(Val(:ENUfromECEF),60°,0°) == SA_F64[-√3/2 1/2 0;0 0 1;1/2 √3/2 0]
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ a5265210-3bd2-4967-b5b8-a2e7e0f84b43
 #=╠═╡ notebook_exclusive
 @test UVfromThetaPhi()(SA_F64[π/6,π/2]) |> ThetaPhifromUV() ≈ SA_F64[π/6,π/2]
@@ -729,12 +729,6 @@ end
 #=╠═╡ notebook_exclusive
 # Test that doing forward and reverse pass leads to the same original LLA point
 @test (LLA(10°,15°,1000) |> ECEFfromLLA() |> ENUfromECEF(LLA(12°,12°,0)) |> ECEFfromENU(LLA(12°,12°,0)) |> LLAfromECEF()) ≈ LLA(10°,15°,1000)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 8ed9af12-2fff-4e87-a5d8-8fc823125d1f
-#=╠═╡ notebook_exclusive
-# Test that the inversion works properly
-@test SA_F64[1e6,1e6,1e6] |> ENUfromECEF(LLA(22°,12°,0)) |> inv(ENUfromECEF(LLA(22°,12°,0))) ≈ SA_F64[1e6,1e6,1e6]
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ ceb05ca6-adea-420a-bcc0-809c19709da2
@@ -1033,11 +1027,6 @@ ecef2uv(ECEFfromLLA()(LLA(1°,1°,0km)), ExtraOutput())
 @benchmark $ecef2uv(SA_F64[6391e3,1e6,1e6])
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 14d6099f-4ac9-4935-9110-1742a121e285
-#=╠═╡ notebook_exclusive
-@benchmark $(inv(ecef2uv))(SA_F64[.1,.1])
-  ╠═╡ notebook_exclusive =#
-
 # ╔═╡ 96d534eb-53c1-4b3c-a4e8-15da01d3b9e5
 #=╠═╡ notebook_exclusive
 _intersection_solutions(ecef2uv.R' * SA_F64[0,0,1],ecef2uv.origin,ecef2uv.ellipsoid.a,ecef2uv.ellipsoid.b)
@@ -1081,6 +1070,17 @@ begin
 	# Tuple overload
 	(trans::UVfromLLA)(tup::Tuple{<:Number, <:Number, <:Number},args...) = trans(LLA(tup...),args...)
 end	
+
+# ╔═╡ 8ed9af12-2fff-4e87-a5d8-8fc823125d1f
+#=╠═╡ notebook_exclusive
+# Test that the inversion works properly
+@test SA_F64[1e6,1e6,1e6] |> ENUfromECEF(LLA(22°,12°,0)) |> inv(ENUfromECEF(LLA(22°,12°,0))) ≈ SA_F64[1e6,1e6,1e6]
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 14d6099f-4ac9-4935-9110-1742a121e285
+#=╠═╡ notebook_exclusive
+@benchmark $(inv(ecef2uv))(SA_F64[.1,.1])
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 20819552-af3f-4734-b285-0f994de3d543
 #=╠═╡ notebook_exclusive
@@ -1947,7 +1947,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[Random]]
-deps = ["SHA", "Serialization"]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[Ratios]]
