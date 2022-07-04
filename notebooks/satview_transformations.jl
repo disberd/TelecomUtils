@@ -740,18 +740,14 @@ begin
 end
 
 # ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
-#=╠═╡ notebook_exclusive
 md"""
 # Tests
 """
-  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 4e0ecf07-e70f-4c3b-9af1-71c35167e7a8
-#=╠═╡ notebook_exclusive
 md"""
 ## ECEF <-> LLA
 """
-  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ e7a82a42-9852-4ac3-8612-938004bf24de
 # ╠═╡ skip_as_script = true
@@ -772,11 +768,9 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ 76da884a-60ff-4b24-bd1f-7d5d8824ab35
-#=╠═╡ notebook_exclusive
 md"""
 ## compute\_sat\_positions
 """
-  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ b07c6df9-586e-4a4c-be16-cc4ac7b1f704
 # ╠═╡ skip_as_script = true
@@ -1484,12 +1478,12 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═f5b5c788-ad21-478d-972f-5bc2d7fd2768
 # ╠═4908872b-0894-454e-afed-0efdc0c3a84f
 # ╠═d569a837-f315-47d4-9624-1bafe9996493
-# ╟─d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
-# ╟─4e0ecf07-e70f-4c3b-9af1-71c35167e7a8
+# ╠═d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
+# ╠═4e0ecf07-e70f-4c3b-9af1-71c35167e7a8
 # ╠═e7a82a42-9852-4ac3-8612-938004bf24de
 # ╠═89eb0e56-e1d5-4497-8de2-3eed528f6358
 # ╠═61ace485-dc58-42dd-a58f-1cd13e1f6444
-# ╟─76da884a-60ff-4b24-bd1f-7d5d8824ab35
+# ╠═76da884a-60ff-4b24-bd1f-7d5d8824ab35
 # ╠═b07c6df9-586e-4a4c-be16-cc4ac7b1f704
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

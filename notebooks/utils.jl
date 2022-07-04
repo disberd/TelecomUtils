@@ -1,8 +1,8 @@
 ### A Pluto.jl notebook ###
-# v0.17.2
+# v0.19.9
 
-# using Markdown
-# using InteractiveUtils
+using Markdown
+using InteractiveUtils
 
 # This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
 macro bind(def, element)
@@ -15,14 +15,15 @@ macro bind(def, element)
 end
 
 # ╔═╡ c0a30957-4c7b-4d7b-bfa9-c2fb691a077b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 begin
 	using Revise
 	using PlutoUtils
 	using PlotlyBase
 	using BenchmarkTools
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 74975885-9a4e-4857-8135-9e4f69061caf
 begin
@@ -34,40 +35,45 @@ begin
 end
 
 # ╔═╡ 379613ec-0973-4000-ae8c-d7c33ddca18e
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 # Packages
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 736b0cf6-bec2-4226-8ef4-70f6a865d34a
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 ToC()
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ f8243a65-9f5e-464e-bb06-0bb4f5131b8b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 # Exports
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 7f645e69-3334-44db-9ba1-9f2d3e0127a2
 const ColorOrderDict{I} = Dictionary{SVector{2, I}, I}
 
 # ╔═╡ 8660a7c4-eb78-4e7c-966b-d759df7f3dfa
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 # Lattice Functions
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 71163795-9695-4f11-acc2-6e3838c8a158
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## generate\_regular_lattice
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ da97848f-a7ff-4f2d-b98d-e8bf1ccc3038
 function lattice_generator(dx::T, dy::T, ds::T;x0::T = T(0), y0::T = T(0), M::Int = 70,N::Int = M) where T<:Real
@@ -111,17 +117,13 @@ end
 # ╔═╡ 0eb5d19d-b535-4cda-a89b-26ba295e2711
 generate_regular_lattice(dx::Real,dy::Real,ds::Real,args...;kwargs...) = generate_regular_lattice(promote(dx,dy,ds)...,args...;kwargs...)
 
-# ╔═╡ 2ba73b51-ecb9-4632-9f39-bdaeb8c5bd34
-#=╠═╡ notebook_exclusive
-@benchmark generate_square_lattice(1, (x,y) -> x^2 + y^2 < 100)
-  ╠═╡ notebook_exclusive =#
-
 # ╔═╡ f0834b38-8efe-4e77-b0f9-47e5b7595191
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## generate\_rect_lattice
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 9e5db472-f96a-4acb-96ae-024b5c73a93d
 """
@@ -137,11 +139,12 @@ See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the
 generate_rect_lattice(spacing_x::Real,spacing_y::Real,args...;kwargs...) = generate_regular_lattice(spacing_x,spacing_y,0,args...;kwargs...)
 
 # ╔═╡ c41f9f41-d8bd-4001-98cb-2ab788404b1b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## generate\_square\_lattice
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 8787134f-9d14-4329-8dda-72557e3175b8
 """
@@ -155,12 +158,19 @@ See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the
 """
 generate_square_lattice(spacing::Real,args...;kwargs...) = generate_regular_lattice(spacing,spacing,0,args...;kwargs...)
 
+# ╔═╡ 2ba73b51-ecb9-4632-9f39-bdaeb8c5bd34
+# ╠═╡ skip_as_script = true
+#=╠═╡
+@benchmark generate_square_lattice(1, (x,y) -> x^2 + y^2 < 100)
+  ╠═╡ =#
+
 # ╔═╡ f589306c-919d-468a-a0fd-9367acc36a7b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## generate\_hex\_lattice
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 6ca05079-4c0d-4c45-8486-a4291310189d
 """
@@ -177,16 +187,18 @@ See [`generate_regular_lattice`](@ref) for a description of `f_cond` and of  the
 generate_hex_lattice(spacing::Real,args...;kwargs...) = generate_regular_lattice(spacing .* (1,√3/2,.5)...,args...;kwargs...)
 
 # ╔═╡ 243621c4-245a-4267-9bb4-568e673450fa
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 generate_hex_lattice(1;M=20, x0 = .5) |> x -> scatter(x; mode="markers") |> Plot
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 059045e0-9acc-438d-b3f5-602f8d5892f7
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 # Misc Functions
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 2f1f02c5-3ea5-40c1-8fae-704d150036e6
 # Get the conversion from linear to db and viceversa
@@ -219,28 +231,31 @@ Get the frequency (in Hz) starting from the wavelength (in m)
 λ2f(λ::Real) = c₀/λ
 
 # ╔═╡ a5ca5a8a-8497-41e2-9af0-92db5db9ce73
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 # Generate Colors
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 0ddf072d-009d-42f2-9a8f-f69fbab750c6
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 The idea here is to find the optimal color ordering that starting from the color associated with the lattice point in (0,0) and populate the available colors in order to always selected the *un-picked* color that has the highest distance from the currently active colors (*picked* lattice points).
 
 To do so, the idea is to verify the distane not just with the unique lattice points, but also with the neighbor lattice points on the direction of the center of the lattice parallelpiped.
 To find the direction of the center of the parallelepiped, we subtract half of the lattice generating vectors from each point and compute the resulting point projection on the base of the parallelepipeid. The sign of the coefficients gives 4 possible quadrant which identify where to extend the lattice points for the computation of the closest active beam. 
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 5db224d4-7379-4c8f-bcee-9cf00011d286
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## plot\_color\_basis
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 5f62c7d2-ebfb-43e6-b9e3-06ca78c99390
 """
@@ -275,21 +290,24 @@ function plot_basis_vector(F)
 end
 
 # ╔═╡ 6107a3dc-26dd-4a0d-aeff-5eca2cd1dcd4
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @bind NN Slider(4:20)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 0d33b162-cc06-4c3b-8ade-5b40106dec0e
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 NN
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 063db114-1b95-47d8-8f8b-26eaff8f9574
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## adjugate
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 8d4eb806-8af1-4127-8f72-6dd68f810eb5
 """
@@ -303,11 +321,12 @@ See: [`mod`](@ref)
 adjugate(A::T) where T <: SMatrix{2, 2, <:Number, 4} = T(A[4], -A[2], -A[3], A[1])
 
 # ╔═╡ d175246c-552a-4f0f-8415-2339e9af833c
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## Base.mod
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 087730c6-cf72-4133-8064-d5619ea4b188
 """
@@ -325,63 +344,67 @@ function Base.mod(m::SVector{2,<:Integer}, M::SMatrix{2,2,<:Integer,4})
 end;
 
 # ╔═╡ 745bb1c1-a312-4dbd-a29f-0836b7dbe8a7
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## get\_deterministic\_color\_order
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 76275b93-5668-4ac9-a6a2-2f4b30ca8ab3
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## get\_color\_illumination\_order
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 9ccf08d4-2ffb-4f36-a632-3b0ed4017d92
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let
 	a = rand(SVector{2,Float64},100)
 	@benchmark map(x -> Int.(sign.(x)), $a)
 end
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ ca09052d-1fce-422d-9205-ae4e87dc4db4
-#=╠═╡ notebook_exclusive
-@benchmark get_color_illumination_order(50; lattice_type = :square)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ f700edf6-0c44-4507-bbf5-4c5dc02fa74c
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 NNN = 16
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 019c9ab2-ef2b-4677-a5aa-d0363fffef72
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 n5 = 17
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ cffd2b81-66c1-4f50-948c-e38ec011105d
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 N4 = 4
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 7785e6b1-881e-4088-82fe-3dad106b07be
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 n4 = 4
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 9cd5609b-1e58-4d39-87ab-b3d7542de691
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 n6, nc = 8, 13
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 89888da7-4912-4557-a375-0150f80ee703
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## new\_color\_order
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ f942e39c-0d93-4bc8-8ff2-112fed566014
 """
@@ -406,11 +429,12 @@ function new_color_order(n::Int, color_order_dict::ColorOrderDict, F)
 end
 
 # ╔═╡ df0602a2-d278-4fae-9957-30c85b55598a
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## get\_projection
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ a86b2ff6-1967-424f-86eb-40fb4288c8b5
 """
@@ -475,18 +499,20 @@ end
 const F_reuse_matrix = (square = SMatrix{2,2,Int,4}[], triangular = SMatrix{2,2,Int,4}[])
 
 # ╔═╡ dbef7000-7c39-49f7-b24e-f0fb436eb54e
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## compute\_F\_cell
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 9183aa40-9dc1-4237-8bf5-de42c93b149f
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## \_coloring\_inner\_bruteforce!
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 6b9beb62-dc7e-4b8b-9b7c-8fee5b1da98f
 function _coloring_inner_bruteforce!(T_mat, rot_mat, grid_max)
@@ -552,11 +578,12 @@ function compute_F_cell(max_colours::Int;grid_max::Int=ceil(Int,sqrt(max_colours
 end
 
 # ╔═╡ 1155e836-99d0-4cc8-83d0-355a6ab6fcc0
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## generate\_F\_reuse\_matrix
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 1d44cf1c-11a5-4366-94f3-85b695c6ca12
 function generate_F_reuse_matrix(N_Colours::Int=4; lattice_type::Symbol=:triangular, max_colours::Int=max(10,N_Colours))
@@ -566,14 +593,16 @@ function generate_F_reuse_matrix(N_Colours::Int=4; lattice_type::Symbol=:triangu
 end
 
 # ╔═╡ a7037a49-c2cb-48b6-bbf9-ca8150afcfbe
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 FF = generate_F_reuse_matrix(:triangular, NN)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 259ea307-2862-42f3-866a-be8f4eb83cf3
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 plot_basis_vector(FF)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ e6033b3e-51fa-4eeb-87ff-e5b5359aebc5
 """
@@ -613,14 +642,16 @@ end
 	
 
 # ╔═╡ 272234bf-ea90-4d24-b5f4-1cd6cdaea20b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 get_deterministic_color_order(150)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 5da650b5-9309-418b-92d9-3388b5385e9b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 fffvec = get_deterministic_color_order(NNN; lattice_type = :triangular)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 6579518a-2130-4e25-b4eb-966e60203f17
 """
@@ -636,12 +667,20 @@ function get_color_illumination_order(N; lattice_type = :triangular)
 end
 
 # ╔═╡ 0f605f2c-029b-4af8-8e52-2c7bc4c7626a
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 get_color_illumination_order(4; lattice_type = :square)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
+
+# ╔═╡ ca09052d-1fce-422d-9205-ae4e87dc4db4
+# ╠═╡ skip_as_script = true
+#=╠═╡
+@benchmark get_color_illumination_order(50; lattice_type = :square)
+  ╠═╡ =#
 
 # ╔═╡ f97bb119-0248-4782-8cf9-cca61a666dbf
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let
 	lattice_type = :triangular
 	cdict, F = get_color_illumination_order(64; lattice_type)
@@ -658,44 +697,51 @@ let
 	]
 	Plot(data)
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ de86f516-b65a-445e-8988-4cfc9dafd000
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 FFF = generate_F_reuse_matrix(NNN; lattice_type = :triangular)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 7f4b9a79-ce48-487f-be37-d884ee9db0e9
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 dio = get_color_illumination_order(FFF, fffvec)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 39820d4a-d05f-4dbc-8d6d-7e20b579688c
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 dio.indices.values
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 7bbafd36-6130-4f00-ac86-63b2bc467b77
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 idio = sort(dio) |> x->Dictionary(x.values, x.indices.values)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 2a45ea3b-ea3e-4d5e-912d-36b0055cf307
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 new_color_order(1, dio, FFF)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 759d6fd6-9649-4bea-b088-1cae1647ad3d
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 map(x -> mod(x + SA[2, -2], FFF), idio)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 39948c5f-d472-48ce-8385-1c67b8f1580a
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 ## get\_L
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ f5f5a045-1c9b-40b8-b326-7d0e1336412c
 """
@@ -714,11 +760,9 @@ function get_L(spacing; lattice_type = :triangular)
 end
 
 # ╔═╡ cd9ee96f-91a9-43cf-980c-6253a0c6018f
-#=╠═╡ notebook_exclusive
 md"""
 ## generate\_colors
 """
-  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 16614e6a-2ef0-4b36-913d-6fd19440b60b
 asdf = let
@@ -899,7 +943,8 @@ function plot_illumination(n, N, spacing; lattice_type = :triangular)
 end	
 
 # ╔═╡ ba3660ba-e274-4e11-9fd1-75aafbb0a776
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let
 	n = n4
 	Nmax = N4 .^ [1 2 3]
@@ -909,10 +954,11 @@ let
 	end
 	vcat(P...)
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 47ffd006-29b2-4774-a791-11b3f88a7aba
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let n = n6, spacing = .5
 	N = 16
 	lattice_type = :triangular
@@ -933,10 +979,11 @@ let n = n6, spacing = .5
 	end
 	Plot(data)
 end	
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ c2a099fb-446c-4a39-b505-973223c38a27
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let
 	N = 4
 	lattice_type = :triangular
@@ -953,17 +1000,19 @@ let
 	))
 	Plot(data)
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 8160086a-6349-447c-87ae-880b02fa97f5
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 md"""
 # Tests
 """
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 3ea0415c-af14-430c-bf7c-2c7d71b7a333
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let
 	N_colors = 6
 	lat = generate_hex_lattice(1; M = 10)
@@ -971,10 +1020,11 @@ let
 	data = scatter(lat;mode="markers", marker_color = colors)
 	Plot(data)
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 65b74f4a-e2af-4caf-8719-5a59c6349bb9
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 let
 	N_colors = 4
 	lat = generate_square_lattice(1; M = 10)
@@ -982,7 +1032,7 @@ let
 	data = scatter(lat;mode="markers", marker_color = colors)
 	Plot(data)
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -998,12 +1048,12 @@ SplitApplyCombine = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-BenchmarkTools = "~1.2.0"
+BenchmarkTools = "~1.3.1"
 Dictionaries = "~0.3.15"
 DocStringExtensions = "~0.8.6"
 PlotlyBase = "~0.8.18"
-PlutoUtils = "~0.5.5"
-Revise = "~3.1.20"
+PlutoUtils = "~0.5.9"
+Revise = "~3.3.3"
 SplitApplyCombine = "~1.2.0"
 StaticArrays = "~1.2.13"
 """
@@ -1012,14 +1062,14 @@ StaticArrays = "~1.2.13"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.0-rc2"
+julia_version = "1.7.0-rc1"
 manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
-git-tree-sha1 = "abb72771fd8895a7ebd83d5632dc4b989b022b5b"
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.1.2"
+version = "1.1.4"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -1032,32 +1082,50 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.BenchmarkTools]]
 deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
-git-tree-sha1 = "61adeb0823084487000600ef8b1c00cc2474cd47"
+git-tree-sha1 = "4c10eee4af024676200bc7752e536f858c6b8f93"
 uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-version = "1.2.0"
+version = "1.3.1"
 
 [[deps.Chain]]
-git-tree-sha1 = "cac464e71767e8a04ceee82a889ca56502795705"
+git-tree-sha1 = "8c4920235f6c561e401dfe569beb8b924adad003"
 uuid = "8be319e6-bccf-4806-a6f7-6fae938471bc"
-version = "0.4.8"
+version = "0.5.0"
+
+[[deps.ChainRulesCore]]
+deps = ["Compat", "LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "2dd813e5f2f7eec2d1268c57cf2373d3ee91fcea"
+uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+version = "1.15.1"
+
+[[deps.ChangesOfVariables]]
+deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
+git-tree-sha1 = "1e315e3f4b0b7ce40feded39c73049692126cf53"
+uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
+version = "0.1.3"
 
 [[deps.CodeTracking]]
 deps = ["InteractiveUtils", "UUIDs"]
-git-tree-sha1 = "9aa8a5ebb6b5bf469a7e0e2b5202cf6f8c291104"
+git-tree-sha1 = "6d4fa04343a7fc9f9cb9cff9558929f3d2752717"
 uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
-version = "1.0.6"
+version = "1.0.9"
 
 [[deps.ColorSchemes]]
-deps = ["ColorTypes", "Colors", "FixedPointNumbers", "Random"]
-git-tree-sha1 = "a851fec56cb73cfdf43762999ec72eff5b86882a"
+deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random"]
+git-tree-sha1 = "1fd869cc3875b57347f7027521f561cf46d1fcd8"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.15.0"
+version = "3.19.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "024fe24d83e4a5bf5fc80501a314ce0d1aa35597"
+git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.11.0"
+version = "0.11.4"
+
+[[deps.ColorVectorSpace]]
+deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "SpecialFunctions", "Statistics", "TensorCore"]
+git-tree-sha1 = "d08c20eef1f2cbc6e60fd3612ac4340b89fea322"
+uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
+version = "0.9.9"
 
 [[deps.Colors]]
 deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
@@ -1065,19 +1133,25 @@ git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.8"
 
+[[deps.Compat]]
+deps = ["Dates", "LinearAlgebra", "UUIDs"]
+git-tree-sha1 = "924cdca592bc16f14d2f7006754a621735280b74"
+uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
+version = "4.1.0"
+
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 
 [[deps.Crayons]]
-git-tree-sha1 = "3f71217b538d7aaee0b69ab47d9b7724ca8afa0d"
+git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
 uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
-version = "4.0.4"
+version = "4.1.1"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "cc70b17275652eb47bc9e5f81635981f13cea5c8"
+git-tree-sha1 = "fb5f5316dd3fd4c5e7c30a24d50643b73e37cd40"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.9.0"
+version = "1.10.0"
 
 [[deps.DataValueInterfaces]]
 git-tree-sha1 = "bfc1187b79289637fa0ef6d4436ebdfe6905cbd6"
@@ -1094,9 +1168,9 @@ uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
 [[deps.Dictionaries]]
 deps = ["Indexing", "Random"]
-git-tree-sha1 = "43ae37eac34e76ac97d1a7db28561243e7242461"
+git-tree-sha1 = "7669d53b75e9f9e2fa32d5215cb2af348b2c13e2"
 uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
-version = "0.3.15"
+version = "0.3.21"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -1139,9 +1213,10 @@ uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
 version = "0.0.4"
 
 [[deps.HypertextLiteral]]
-git-tree-sha1 = "2b078b5a615c6c0396c77810d92ee8c6f470d238"
+deps = ["Tricks"]
+git-tree-sha1 = "c47c5fa4c5308f27ccaac35504858d8914e102f9"
 uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
-version = "0.9.3"
+version = "0.9.4"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
@@ -1158,22 +1233,39 @@ version = "1.1.1"
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
+[[deps.InverseFunctions]]
+deps = ["Test"]
+git-tree-sha1 = "b3364212fb5d870f724876ffcd34dd8ec6d98918"
+uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
+version = "0.1.7"
+
+[[deps.IrrationalConstants]]
+git-tree-sha1 = "7fd44fd4ff43fc60815f8e764c0f352b83c49151"
+uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
+version = "0.1.1"
+
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
+[[deps.JLLWrappers]]
+deps = ["Preferences"]
+git-tree-sha1 = "abc9885a7ca2052a736a600f7fa66209f96506e1"
+uuid = "692b3bcd-3c85-4b1f-b108-f13ce0eb3210"
+version = "1.4.1"
+
 [[deps.JSON]]
 deps = ["Dates", "Mmap", "Parsers", "Unicode"]
-git-tree-sha1 = "8076680b162ada2a031f707ac7b4953e30667a37"
+git-tree-sha1 = "3c837543ddb02250ef42f4738347454f95079d4e"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-version = "0.21.2"
+version = "0.21.3"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "e273807f38074f033d94207a201e6e827d8417db"
+git-tree-sha1 = "52617c41d2761cc05ed81fe779804d3b7f14fff7"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.8.21"
+version = "0.9.13"
 
 [[deps.LaTeXStrings]]
 git-tree-sha1 = "f2355693d6778a178ade15952b7ac47a4ff97996"
@@ -1203,14 +1295,20 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
+[[deps.LogExpFunctions]]
+deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
+git-tree-sha1 = "09e4b894ce6a976c354a69041a04748180d43637"
+uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+version = "0.3.15"
+
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[deps.LoweredCodeUtils]]
 deps = ["JuliaInterpreter"]
-git-tree-sha1 = "491a883c4fef1103077a7f648961adbf9c8dd933"
+git-tree-sha1 = "dedbebe234e06e1ddad435f5c6f4b85cd8ce55f7"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "2.1.2"
+version = "2.2.2"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -1239,6 +1337,16 @@ uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 
+[[deps.OpenLibm_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
+
+[[deps.OpenSpecFun_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
+uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
+version = "0.5.5+0"
+
 [[deps.OrderedCollections]]
 git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
@@ -1252,9 +1360,9 @@ version = "0.12.3"
 
 [[deps.Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "ae4bbcadb2906ccc085cf52ac286dc1377dceccc"
+git-tree-sha1 = "0044b23da09b5608b4ecacb4e5e6c6332f833a7e"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.1.2"
+version = "2.3.2"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
@@ -1268,27 +1376,33 @@ version = "0.8.18"
 
 [[deps.PlutoDevMacros]]
 deps = ["MacroTools", "Requires"]
-git-tree-sha1 = "f5cbbcaa26fe68fd63bc25f5a9e626b7f0e515b0"
+git-tree-sha1 = "994167def8f46d3be21783a76705228430e29632"
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.4.4"
+version = "0.4.5"
 
 [[deps.PlutoUI]]
-deps = ["AbstractPlutoDingetjes", "Base64", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
-git-tree-sha1 = "b68904528fd538f1cb6a3fbc44d2abdc498f9e8e"
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "8d1f54886b9037091edf146b517989fc4a09efec"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.21"
+version = "0.7.39"
 
 [[deps.PlutoUtils]]
-deps = ["Chain", "Colors", "DocStringExtensions", "Glob", "HypertextLiteral", "OrderedCollections", "PlutoDevMacros", "PlutoUI", "PrettyTables", "Reexport", "Requires", "StaticArrays", "UUIDs"]
-git-tree-sha1 = "27589f8f79b24c096e92520b03cdab764d2b6a88"
+deps = ["AbstractPlutoDingetjes", "Chain", "Colors", "DocStringExtensions", "Glob", "HypertextLiteral", "OrderedCollections", "PlutoDevMacros", "PlutoUI", "PrettyTables", "Reexport", "Requires", "StaticArrays", "UUIDs"]
+git-tree-sha1 = "3f8dfe27dbb980ad5e83ecd641ded8eed91f3265"
 uuid = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
-version = "0.5.5"
+version = "0.5.9"
+
+[[deps.Preferences]]
+deps = ["TOML"]
+git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
+uuid = "21216c6a-2e73-6563-6e65-726566657250"
+version = "1.3.0"
 
 [[deps.PrettyTables]]
 deps = ["Crayons", "Formatting", "Markdown", "Reexport", "Tables"]
-git-tree-sha1 = "d940010be611ee9d67064fe559edbb305f8cc0eb"
+git-tree-sha1 = "dfb54c4e414caa595a1f2ed759b160f5a3ddcba5"
 uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "1.2.3"
+version = "1.3.1"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1303,7 +1417,7 @@ deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [[deps.Random]]
-deps = ["SHA", "Serialization"]
+deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [[deps.Reexport]]
@@ -1313,15 +1427,15 @@ version = "1.2.2"
 
 [[deps.Requires]]
 deps = ["UUIDs"]
-git-tree-sha1 = "4036a3bd08ac7e968e27c203d45f5fff15020621"
+git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
-version = "1.1.3"
+version = "1.3.0"
 
 [[deps.Revise]]
 deps = ["CodeTracking", "Distributed", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Pkg", "REPL", "Requires", "UUIDs", "Unicode"]
-git-tree-sha1 = "41deb3df28ecf75307b6e492a738821b031f8425"
+git-tree-sha1 = "4d4239e93531ac3e7ca7e339f15978d0b5149d03"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.1.20"
+version = "3.3.3"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -1336,11 +1450,17 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
+[[deps.SpecialFunctions]]
+deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
+git-tree-sha1 = "a9e798cae4867e3a41cae2dd9eb60c047f1212db"
+uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
+version = "2.1.6"
+
 [[deps.SplitApplyCombine]]
 deps = ["Dictionaries", "Indexing"]
-git-tree-sha1 = "dec0812af1547a54105b4a6615f341377da92de6"
+git-tree-sha1 = "48f393b0231516850e39f6c756970e7ca8b77045"
 uuid = "03a91e81-4c3e-53e1-a0a4-9c0c8f19dd66"
-version = "1.2.0"
+version = "1.2.2"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
@@ -1363,18 +1483,29 @@ uuid = "3783bdb8-4a98-5b6b-af9a-565f29a5fe9c"
 version = "1.0.1"
 
 [[deps.Tables]]
-deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "TableTraits", "Test"]
-git-tree-sha1 = "fed34d0e71b91734bf0a7e10eb1bb05296ddbcd0"
+deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits", "Test"]
+git-tree-sha1 = "5ce79ce186cc678bbb5c5681ca3379d1ddae11a1"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.6.0"
+version = "1.7.0"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 
+[[deps.TensorCore]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
+uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
+version = "0.1.1"
+
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[deps.Tricks]]
+git-tree-sha1 = "6bac775f2d42a611cdfcd1fb217ee719630c4175"
+uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
+version = "0.1.6"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -1406,48 +1537,48 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 """
 
 # ╔═╡ Cell order:
-# ╟─379613ec-0973-4000-ae8c-d7c33ddca18e
+# ╠═379613ec-0973-4000-ae8c-d7c33ddca18e
 # ╠═c0a30957-4c7b-4d7b-bfa9-c2fb691a077b
 # ╠═74975885-9a4e-4857-8135-9e4f69061caf
 # ╠═736b0cf6-bec2-4226-8ef4-70f6a865d34a
-# ╟─f8243a65-9f5e-464e-bb06-0bb4f5131b8b
+# ╠═f8243a65-9f5e-464e-bb06-0bb4f5131b8b
 # ╠═d8584d03-8eb4-4864-b646-a6a0656a2e12
 # ╠═7f645e69-3334-44db-9ba1-9f2d3e0127a2
-# ╟─8660a7c4-eb78-4e7c-966b-d759df7f3dfa
-# ╟─71163795-9695-4f11-acc2-6e3838c8a158
+# ╠═8660a7c4-eb78-4e7c-966b-d759df7f3dfa
+# ╠═71163795-9695-4f11-acc2-6e3838c8a158
 # ╠═f8a53711-e07f-4b6b-84ea-803679496571
 # ╠═ce22b91e-6bba-4312-a89b-1a78f84034d3
 # ╠═da97848f-a7ff-4f2d-b98d-e8bf1ccc3038
 # ╠═0eb5d19d-b535-4cda-a89b-26ba295e2711
 # ╠═2ba73b51-ecb9-4632-9f39-bdaeb8c5bd34
-# ╟─f0834b38-8efe-4e77-b0f9-47e5b7595191
+# ╠═f0834b38-8efe-4e77-b0f9-47e5b7595191
 # ╠═9e5db472-f96a-4acb-96ae-024b5c73a93d
-# ╟─c41f9f41-d8bd-4001-98cb-2ab788404b1b
+# ╠═c41f9f41-d8bd-4001-98cb-2ab788404b1b
 # ╠═8787134f-9d14-4329-8dda-72557e3175b8
-# ╟─f589306c-919d-468a-a0fd-9367acc36a7b
+# ╠═f589306c-919d-468a-a0fd-9367acc36a7b
 # ╠═6ca05079-4c0d-4c45-8486-a4291310189d
 # ╠═243621c4-245a-4267-9bb4-568e673450fa
-# ╟─059045e0-9acc-438d-b3f5-602f8d5892f7
+# ╠═059045e0-9acc-438d-b3f5-602f8d5892f7
 # ╠═2f1f02c5-3ea5-40c1-8fae-704d150036e6
 # ╠═5be397fe-a531-423c-8be0-5d31df79dd2f
 # ╠═b2e80c33-bbfe-43ca-8795-c9d8d6fa52a9
 # ╠═9165c4d4-69b5-456c-813c-4725feeb5b52
-# ╟─a5ca5a8a-8497-41e2-9af0-92db5db9ce73
-# ╟─0ddf072d-009d-42f2-9a8f-f69fbab750c6
-# ╟─5db224d4-7379-4c8f-bcee-9cf00011d286
+# ╠═a5ca5a8a-8497-41e2-9af0-92db5db9ce73
+# ╠═0ddf072d-009d-42f2-9a8f-f69fbab750c6
+# ╠═5db224d4-7379-4c8f-bcee-9cf00011d286
 # ╠═5f62c7d2-ebfb-43e6-b9e3-06ca78c99390
 # ╠═6107a3dc-26dd-4a0d-aeff-5eca2cd1dcd4
 # ╠═0d33b162-cc06-4c3b-8ade-5b40106dec0e
 # ╠═a7037a49-c2cb-48b6-bbf9-ca8150afcfbe
 # ╠═259ea307-2862-42f3-866a-be8f4eb83cf3
-# ╟─063db114-1b95-47d8-8f8b-26eaff8f9574
+# ╠═063db114-1b95-47d8-8f8b-26eaff8f9574
 # ╠═8d4eb806-8af1-4127-8f72-6dd68f810eb5
-# ╟─d175246c-552a-4f0f-8415-2339e9af833c
+# ╠═d175246c-552a-4f0f-8415-2339e9af833c
 # ╠═087730c6-cf72-4133-8064-d5619ea4b188
-# ╟─745bb1c1-a312-4dbd-a29f-0836b7dbe8a7
+# ╠═745bb1c1-a312-4dbd-a29f-0836b7dbe8a7
 # ╠═e6033b3e-51fa-4eeb-87ff-e5b5359aebc5
 # ╠═272234bf-ea90-4d24-b5f4-1cd6cdaea20b
-# ╟─76275b93-5668-4ac9-a6a2-2f4b30ca8ab3
+# ╠═76275b93-5668-4ac9-a6a2-2f4b30ca8ab3
 # ╠═6579518a-2130-4e25-b4eb-966e60203f17
 # ╠═9ccf08d4-2ffb-4f36-a632-3b0ed4017d92
 # ╠═41817b1f-4c5e-4a55-93b7-520d6b71ea9c
@@ -1469,25 +1600,25 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═66417309-8d6d-47e9-b5ef-7fcc0cde9194
 # ╠═9cd5609b-1e58-4d39-87ab-b3d7542de691
 # ╠═47ffd006-29b2-4774-a791-11b3f88a7aba
-# ╟─89888da7-4912-4557-a375-0150f80ee703
+# ╠═89888da7-4912-4557-a375-0150f80ee703
 # ╠═f942e39c-0d93-4bc8-8ff2-112fed566014
-# ╟─df0602a2-d278-4fae-9957-30c85b55598a
+# ╠═df0602a2-d278-4fae-9957-30c85b55598a
 # ╠═a86b2ff6-1967-424f-86eb-40fb4288c8b5
 # ╠═3f2a31d4-0fa8-40fa-9dc4-bd6a26d2ddc9
-# ╟─dbef7000-7c39-49f7-b24e-f0fb436eb54e
+# ╠═dbef7000-7c39-49f7-b24e-f0fb436eb54e
 # ╠═14cb2a0b-2ea8-471b-987f-1647f1516992
-# ╟─9183aa40-9dc1-4237-8bf5-de42c93b149f
+# ╠═9183aa40-9dc1-4237-8bf5-de42c93b149f
 # ╠═6b9beb62-dc7e-4b8b-9b7c-8fee5b1da98f
-# ╟─1155e836-99d0-4cc8-83d0-355a6ab6fcc0
+# ╠═1155e836-99d0-4cc8-83d0-355a6ab6fcc0
 # ╠═1d44cf1c-11a5-4366-94f3-85b695c6ca12
-# ╟─39948c5f-d472-48ce-8385-1c67b8f1580a
+# ╠═39948c5f-d472-48ce-8385-1c67b8f1580a
 # ╠═f5f5a045-1c9b-40b8-b326-7d0e1336412c
-# ╟─cd9ee96f-91a9-43cf-980c-6253a0c6018f
+# ╠═cd9ee96f-91a9-43cf-980c-6253a0c6018f
 # ╠═16614e6a-2ef0-4b36-913d-6fd19440b60b
 # ╠═d3e49592-cee0-4414-9b92-ce2fb66529df
 # ╠═c2a099fb-446c-4a39-b505-973223c38a27
 # ╠═7e68054e-4268-424e-b413-ef18baf832ac
-# ╟─8160086a-6349-447c-87ae-880b02fa97f5
+# ╠═8160086a-6349-447c-87ae-880b02fa97f5
 # ╠═3ea0415c-af14-430c-bf7c-2c7d71b7a333
 # ╠═65b74f4a-e2af-4caf-8719-5a59c6349bb9
 # ╟─00000000-0000-0000-0000-000000000001

@@ -57,9 +57,10 @@ md"""
 @plutoinclude "satview_transformations.jl" "all"
 
 # ╔═╡ de735c56-612c-4ffd-8335-95f20a129390
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @macroexpand @plutoinclude "satview_transformations.jl" "all"
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ a57e3983-21de-4a2e-a227-8265fee6b56b
 # ╠═╡ skip_as_script = true
@@ -75,7 +76,6 @@ md"""
 md"""
 # SatView
 """
-  ╠═╡ notebook_exclusive =#
   ╠═╡ =#
 
 # ╔═╡ b966fa0c-dc52-4821-bc32-e78dd3272ce1
