@@ -590,9 +590,6 @@ function get_nadir_beam_diameter(sv, scan_3db)
 	get_distance_on_earth(sv, p1, p2)
 end
 
-# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
-export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter
-
 # ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -644,6 +641,9 @@ function get_angle2Sat(sv1::SatView, sv2::SatView, ::ExtraOutput)
 # ╔═╡ 56d88bb9-3b33-4b1a-88ae-d90af4de2bd1
 # Call returning only angle from sv1 to sv2
 get_angle2Sat(sv1::SatView, sv2::SatView) = get_angle2Sat(sv1,sv2,ExtraOutput())[1]
+
+# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
+export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, get_angle2Sat
 
 # ╔═╡ c02d0705-6647-4a44-8ae8-fc256f18c4ce
 # ╠═╡ skip_as_script = true
