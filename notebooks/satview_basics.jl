@@ -251,7 +251,7 @@ begin
 		
 		function ERA(el::Real,r::Real,az::Real)
 			(isnan(el) || isnan(r) || isnan(az)) && return new(NaN,NaN,NaN)  
-			@assert el >= 0 && el <= π/2 "Elevation should be between 0 and π/2"
+			@assert el >= 0 && el <= π/2 "Elevation (and azimuth) should be provided in radians and between 0 and π/2.  If you wish to use degrees as inputs please multiply the first and last arguments by `°` (from Unitful.jl), which is re-exported by TelecomUtils and can be written with `\degree<TAB>`"
 			@assert r >= 0 "Range must be positive"
 			new(el,r,rem2pi(az,RoundNearest))
 		end
@@ -323,7 +323,7 @@ begin
 		function LLA(lat::Real,lon::Real,alt::Real)
 			(isnan(lat) || isnan(lon) || isnan(alt)) && return new(NaN,NaN,NaN)  
 			l2 = rem2pi(lon,RoundNearest)
-			@assert abs(lat) <= π/2 "Latitude should be between -π/2 and π/2"
+			@assert abs(lat) <= π/2 "Latitude should be given in radians and between -π/2 and π/2. If you wish to use degrees as inputs please multiply the first two arguments by `°` (from Unitful.jl), which is re-exported by TelecomUtils and can be written with `\degree<TAB>`"
 			new(lat,l2,alt)
 		end
 	end
