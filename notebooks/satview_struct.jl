@@ -590,6 +590,9 @@ function get_nadir_beam_diameter(sv, scan_3db)
 	get_distance_on_earth(sv, p1, p2)
 end
 
+# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
+export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, get_angle2Sat
+
 # ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -602,48 +605,45 @@ md"""
 """
 
 # ╔═╡ 28938135-9c93-4992-bfec-f106d8aa0bf6
-function get_angle2Sat(sv1::SatView, sv2::SatView, ::ExtraOutput)  
-	# Find the angle between 2 satellites (same or different shell) from the nadir/zenith of sv1 to sv2 and viceversa. If the LoS between the two satellites is obstructed by Earth return NaN.
+# function get_angle2Sat(sv1::SatView, sv2::SatView, ::ExtraOutput)  
+# 	# Find the angle between 2 satellites (same or different shell) from the nadir/zenith of sv1 to sv2 and viceversa. If the LoS between the two satellites is obstructed by Earth return NaN.
 
-	# Find the difference vector between the satellites (vector "connecting" sv1 and sv2)
- 	pdiff = (sv1.ecef - sv2.ecef) 
+# 	# Find the difference vector between the satellites (vector "connecting" sv1 and sv2)
+#  	pdiff = (sv1.ecef - sv2.ecef) 
  	 
- 	# Find the magnitude of the difference to compare with the intersection solutions 
- 	t = norm(pdiff) 
+#  	# Find the magnitude of the difference to compare with the intersection solutions 
+#  	t = norm(pdiff) 
  	 
- 	# Find the intersection points with the ellipsoid 
- 	t₁,t₂ = _intersection_solutions(pdiff./t, sv1.ecef, sv1.earthmodel.ellipsoid.a, sv1.earthmodel.ellipsoid.b) 
+#  	# Find the intersection points with the ellipsoid 
+#  	t₁,t₂ = _intersection_solutions(pdiff./t, sv1.ecef, sv1.earthmodel.ellipsoid.a, sv1.earthmodel.ellipsoid.b) 
  	 
- 	# If both t₁ and t₂ are NaN, it means that no intersection with the ellipsoid is found and so there is no earth blockage 
- 	# If t <= t₁ also no blockage is present 
- 	# If t > t₁ then the earth is blocking the view point so we return NaN 
+#  	# If both t₁ and t₂ are NaN, it means that no intersection with the ellipsoid is found and so there is no earth blockage 
+#  	# If t <= t₁ also no blockage is present 
+#  	# If t > t₁ then the earth is blocking the view point so we return NaN 
  	 
- 	# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision 
-	# Return NaN if the Earth is blocking the LoS between 2 satellites
- 	!isnan(t₁) && abs(t) > abs(t₁)+1e-3 && return NaN, NaN, NaN 
+#  	# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision 
+# 	# Return NaN if the Earth is blocking the LoS between 2 satellites
+#  	!isnan(t₁) && abs(t) > abs(t₁)+1e-3 && return NaN, NaN, NaN 
  	 
- 	# Find the coordinates in the West-North-Down CRS (centered in sv1)
- 	wnd = sv1.R * pdiff 
+#  	# Find the coordinates in the West-North-Down CRS (centered in sv1)
+#  	wnd = sv1.R * pdiff 
 
-	# Convert in spherical coordinates
-	x,y,z = wnd
- 	r = hypot(x, y, z) 
- 	θ = r == 0 ? 0 : acos(z/r) # 0: nadir
-	# //TODO: check consistency with the rest of the cde for angle conventions (remove -x)
- 	ϕ = r == 0 ? 0 : atan(y,x) # angle measured from West to North clockwise wrt the local reference 
+# 	# Convert in spherical coordinates
+# 	x,y,z = wnd
+#  	r = hypot(x, y, z) 
+#  	θ = r == 0 ? 0 : acos(z/r) # 0: nadir
+# 	# //TODO: check consistency with the rest of the cde for angle conventions (remove -x)
+#  	ϕ = r == 0 ? 0 : atan(y,x) # angle measured from West to North clockwise wrt the local reference 
  	 
- 	# Return coordinates 
-	# //TODO: check unit for consistency
- 	# return θ * rad, ϕ * rad, r * m
- 	return θ, ϕ, r
- end
+#  	# Return coordinates 
+# 	# //TODO: check unit for consistency
+#  	# return θ * rad, ϕ * rad, r * m
+#  	return θ, ϕ, r
+#  end
 
 # ╔═╡ 56d88bb9-3b33-4b1a-88ae-d90af4de2bd1
-# Call returning only angle from sv1 to sv2
-get_angle2Sat(sv1::SatView, sv2::SatView) = get_angle2Sat(sv1,sv2,ExtraOutput())[1]
-
-# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
-export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, get_angle2Sat
+# # Call returning only angle from sv1 to sv2
+# get_angle2Sat(sv1::SatView, sv2::SatView) = get_angle2Sat(sv1,sv2,ExtraOutput())[1]
 
 # ╔═╡ c02d0705-6647-4a44-8ae8-fc256f18c4ce
 # ╠═╡ skip_as_script = true
