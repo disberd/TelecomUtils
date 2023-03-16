@@ -167,7 +167,7 @@ The first argument specifies whether to use the DVBS2x thresholds or the Shannon
 
 See also: [`DVBS2x`](@ref), [`Shannon`](@ref), [`snr2speff`](@ref)
 """
-speff2snr(::DVBS2x, η) = η > dvbs2x_modcod_speff[end] ? NaN : dvbs2x_thresholds_linear[floor(Int,_dvbs2x_itp_speff(η))]
+speff2snr(::DVBS2x, η) = η > dvbs2x_modcod_speff[end] ? NaN : dvbs2x_thresholds_linear[ceil(Int,_dvbs2x_itp_speff(η))]
 
 # ╔═╡ 215ca230-77fd-4bbb-a4f7-8af1a0c9bcb3
 """
