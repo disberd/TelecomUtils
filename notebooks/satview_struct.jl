@@ -600,50 +600,93 @@ get_nadir_beam_diameter(SatView(LLA(50°,0°,735km), EarthModel()), 55)
   ╠═╡ =#
 
 # ╔═╡ 22a1312d-c7f4-486f-a62c-3389f7715bae
-md"""
-## Get Angle Between Satellites
 """
+    get_angle2Sat(sv₁::SatView, sv₂::SatView, ::TelecomUtils.ExtraOutput)
+    get_angle2Sat(sv₁::SatView, sv₂::SatView)
 
-# ╔═╡ 28938135-9c93-4992-bfec-f106d8aa0bf6
-# function get_angle2Sat(sv1::SatView, sv2::SatView, ::ExtraOutput)  
-# 	# Find the angle between 2 satellites (same or different shell) from the nadir/zenith of sv1 to sv2 and viceversa. If the LoS between the two satellites is obstructed by Earth return NaN.
+This function calculates the angle between two satellites (same or different shell) from the nadir/zenith of `sv₁` to `sv₂` and vice versa. If the Line of Sight (LoS) between the two satellites is obstructed by the Earth, the function returns NaN. The function has two methods.
 
-# 	# Find the difference vector between the satellites (vector "connecting" sv1 and sv2)
-#  	pdiff = (sv1.ecef - sv2.ecef) 
- 	 
-#  	# Find the magnitude of the difference to compare with the intersection solutions 
-#  	t = norm(pdiff) 
- 	 
-#  	# Find the intersection points with the ellipsoid 
-#  	t₁,t₂ = _intersection_solutions(pdiff./t, sv1.ecef, sv1.earthmodel.ellipsoid.a, sv1.earthmodel.ellipsoid.b) 
- 	 
-#  	# If both t₁ and t₂ are NaN, it means that no intersection with the ellipsoid is found and so there is no earth blockage 
-#  	# If t <= t₁ also no blockage is present 
-#  	# If t > t₁ then the earth is blocking the view point so we return NaN 
- 	 
-#  	# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision 
-# 	# Return NaN if the Earth is blocking the LoS between 2 satellites
-#  	!isnan(t₁) && abs(t) > abs(t₁)+1e-3 && return NaN, NaN, NaN 
- 	 
-#  	# Find the coordinates in the West-North-Down CRS (centered in sv1)
-#  	wnd = sv1.R * pdiff 
+## Logic:
+1. Find the difference vector between the satellites.
+2. Find the magnitude of the difference to compare with the intersection solutions.
+3. Find the intersection points with the ellipsoid.
+4. Check if both t₁ and t₂ are NaN. If both are NaN, then there is no intersection with the ellipsoid and so there is no earth blockage. If t <= t₁, then there is no blockage present. If t > t₁, then the earth is blocking the view point so return NaN.
+5. Find the coordinates in the West-North-Down CRS (centered in sv₁) and convert them into spherical coordinates.
+6. Find the coordinates in the West-North-Down CRS (centered in sv₂) and convert them into spherical coordinates.
+7. Return spherical coordinates as a tuple from the point of view of sv₁ and sv₂.
 
-# 	# Convert in spherical coordinates
-# 	x,y,z = wnd
-#  	r = hypot(x, y, z) 
-#  	θ = r == 0 ? 0 : acos(z/r) # 0: nadir
-# 	# //TODO: check consistency with the rest of the cde for angle conventions (remove -x)
-#  	ϕ = r == 0 ? 0 : atan(y,x) # angle measured from West to North clockwise wrt the local reference 
+#### Input Parameters
+- sv₁::SatView: a SatView object representing the first satellite
+- sv₂::SatView: a SatView object representing the second satellite
+- ::TelecomUtils.ExtraOutput: an optional argument of type TelecomUtils.ExtraOutput which is not used by the function (if called without `TelecomUtils.ExtraOutput` the function return the tuples only from the PoV of `sv₁`).
+
+#### Output Parameters
+Returns a tuple with two elements, where each element is a tuple that represents the coordinates from the Point of View (PoV) of sv₁ and sv₂, respectively. The coordinates are in spherical coordinates and include the angles θ [rad] and ϕ [rad] and the distance r [m] (if called without `TelecomUtils.ExtraOutput` the function return the tuples only from the PoV of `sv₁`). θ ranges from 0 to pi (0 at nadir, Down) and ϕ ranges 0 to 2pi
+
+## Example
+```
+# Creating objects of type `SatView`
+sv1 = SatView()
+sv2 = SatView()
+
+# Getting the angle between two satellites
+angle1, angle2 = get_angle2Sat(sv1, sv2, TelecomUtils.ExtraOutput)
+
+# Printing the output
+println("Angle from the point of view of sv1: (θ = angle1.θ, ϕ = angle1.ϕ, r = angle1.r)")
+println("Angle from the point of view of sv2: (θ = angle2.θ, ϕ = angle2.ϕ, r = angle2.r)")
+```
+
+See also: [`SatView`](@ref)
+"""
+function get_angle2Sat(sv₁::SatView, sv₂::SatView, ::TelecomUtils.ExtraOutput)  
+	# Find the angle between 2 satellites (same or different shell) from the nadir/zenith of sv₁ to sv₂ and viceversa. If the LoS between the two satellites is obstructed by Earth return NaN.
+
+	# Find the difference vector between the satellites (vector "connecting" sv₁ --> sv₂)
+ 	pdiff = (sv₂.ecef - sv₁.ecef) 
  	 
-#  	# Return coordinates 
-# 	# //TODO: check unit for consistency
-#  	# return θ * rad, ϕ * rad, r * m
-#  	return θ, ϕ, r
-#  end
+ 	# Find the magnitude of the difference to compare with the intersection solutions 
+ 	t = norm(pdiff) 
+ 	 
+ 	# Find the intersection points with the ellipsoid 
+ 	t₁,t₂ = TelecomUtils._intersection_solutions(pdiff./t, sv₁.ecef, sv₁.earthmodel.ellipsoid.a, sv₁.earthmodel.ellipsoid.b) 
+ 	 
+ 	# If both t₁ and t₂ are NaN, it means that no intersection with the ellipsoid is found and so there is no earth blockage 
+ 	# If t <= t₁ also no blockage is present 
+ 	# If t > t₁ then the earth is blocking the view point so we return NaN 
+ 	 
+ 	# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision 
+	# Return NaN if the Earth is blocking the LoS between 2 satellites
+ 	!isnan(t₁) && t₁ > 0 && t > t₁+1e-3 && return (θ=NaN,ϕ=NaN,r=NaN), (θ=NaN,ϕ=NaN,r=NaN)	
+
+	# sv₁ --> sv₂
+ 	# Find the coordinates in the West-North-Down CRS (centered in sv₁)
+ 	wnd₁ = sv₁.R' * pdiff
+	# Convert in spherical coordinates
+	x₁,y₁,z₁ = wnd₁
+ 	r₁ = hypot(x₁, y₁, z₁) 
+ 	θ₁ = r₁ == 0 ? 0.0 : acos(z₁/r₁) # 0: nadir
+	# //TODO: check consistency with the rest of the code for angle conventions (remove -x)
+ 	ϕ₁ = r₁ == 0 ? 0.0 : atan(y₁,x₁) # angle measured from West to North clockwise wrt the local reference 
+
+	# sv₂ --> sv₁ 
+ 	# Find the coordinates in the West-North-Down CRS (centered in sv₂)
+ 	wnd₂ = sv₂.R' * (-pdiff) 
+	# @info (;t,t₁,t₂,pdiff,wnd₁,wnd₂) # debug
+	# Convert in spherical coordinates
+	x₂,y₂,z₂ = wnd₂
+ 	r₂ = hypot(x₂, y₂, z₂) 
+ 	θ₂ = r₂ == 0 ? 0.0 : acos(z₂/r₂) # 0: nadir
+	# //TODO: check consistency with the rest of the cde for angle conventions (remove -x)
+ 	ϕ₂ = r₂ == 0 ? 0.0 : atan(y₂,x₂) # angle measured from West to North clockwise wrt the local reference 
+ 	 
+ 	# Return coordinates as Tuple from the PoV of sv₁ and sv₂ rispectively	
+ 	return (θ=θ₁,ϕ=ϕ₁,r=r₁), (θ=θ₂,ϕ=ϕ₂,r=r₂)
+ end
 
 # ╔═╡ 56d88bb9-3b33-4b1a-88ae-d90af4de2bd1
-# # Call returning only angle from sv1 to sv2
-# get_angle2Sat(sv1::SatView, sv2::SatView) = get_angle2Sat(sv1,sv2,ExtraOutput())[1]
+# Call returning only angles from sv₁ --> sv₂
+get_angle2Sat(sv₁::SatView, sv₂::SatView) = get_angle2Sat(sv₁,sv₂,TelecomUtils.ExtraOutput())[1]
 
 # ╔═╡ c02d0705-6647-4a44-8ae8-fc256f18c4ce
 # ╠═╡ skip_as_script = true
