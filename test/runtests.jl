@@ -1,6 +1,7 @@
 using TelecomUtils
 using Test
 
-@testset "TelecomUtils.jl" begin
+@testset verbose=true "TelecomUtils.jl" begin
     include("satview_basics.jl")
+    include("satview_transformations.jl")
 end
