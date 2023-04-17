@@ -1,6 +1,8 @@
 using TelecomUtils
 using Test
 
-@testset "TelecomUtils.jl" begin
-    # Write your tests here.
+@testset verbose=true "TelecomUtils.jl" begin
+    include("satview_basics.jl")
+    include("satview_transformations.jl")
+    include("satview_struct.jl")
 end
