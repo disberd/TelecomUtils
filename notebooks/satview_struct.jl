@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.22
+# v0.19.24
 
 #> custom_attrs = ["hide-enabled"]
 
@@ -57,12 +57,6 @@ md"""
 
 # ╔═╡ 7729ce27-df74-4393-ab70-c4e2864c85f5
 @plutoinclude "satview_transformations.jl" "all"
-
-# ╔═╡ de735c56-612c-4ffd-8335-95f20a129390
-# ╠═╡ skip_as_script = true
-#=╠═╡
-@macroexpand @plutoinclude "satview_transformations.jl" "all"
-  ╠═╡ =#
 
 # ╔═╡ a57e3983-21de-4a2e-a227-8265fee6b56b
 # ╠═╡ skip_as_script = true
@@ -667,9 +661,9 @@ Unitful = "~1.10.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-beta4"
+julia_version = "1.9.0-rc2"
 manifest_format = "2.0"
-project_hash = "922f0b724d570276113fc88a065092df8a387185"
+project_hash = "edbaf21b001d00e6e5e20eb810f9b65ab5c9588b"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -989,7 +983,7 @@ version = "1.1.7"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.0+0"
+version = "2.28.2+0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
@@ -1017,7 +1011,7 @@ version = "1.12.9"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.21+0"
+version = "0.3.21+4"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1337,7 +1331,6 @@ version = "17.4.0+0"
 # ╠═dcc81988-903b-4707-a70c-09c38682c80f
 # ╟─3fd1046c-fabf-4264-9638-ba41301b1804
 # ╠═7729ce27-df74-4393-ab70-c4e2864c85f5
-# ╠═de735c56-612c-4ffd-8335-95f20a129390
 # ╠═a57e3983-21de-4a2e-a227-8265fee6b56b
 # ╠═b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
 # ╠═030e15c5-83a8-4a24-836a-96b6f4f0bb04
