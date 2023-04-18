@@ -25,6 +25,7 @@ begin
 	using PlutoDevMacros
 	using PlutoExtras
 	using PlutoTest
+	using BenchmarkTools
 end
   ╠═╡ =#
 
@@ -286,14 +287,25 @@ begin
 	end
 end
 
-# ╔═╡ 16782c72-ecb1-48ec-8510-78e2e0689a10
-function Base.isapprox(x1::ERA, x2::ERA)
-	x1.el ≉ x2.el && return false
-	# Don't care about different azimuth if elevation is 90°
-	x2.el ≉ π/2 && x1.az ≉ x2.az && return false
-	x1.r ≉ x2.r && return false
-	return true
-end
+# ╔═╡ 39af2a26-e882-4596-846c-4699c1a0f3a2
+#=╠═╡
+@test ERA(0°, 0km, 0°) ≉ ERA(1.1e-5°, 0km, 0°)
+  ╠═╡ =#
+
+# ╔═╡ 4dc4e619-9d2e-45ea-9072-baef5680ef28
+#=╠═╡
+@test ERA(0°, 0km, 0°) ≈ ERA(1e-5°, 0km, 0°)
+  ╠═╡ =#
+
+# ╔═╡ 948e5814-60ca-4269-ae33-542b835b4116
+#=╠═╡
+@test ERA(0°, 0km, 0°) ≈ ERA(1e-5°, 0km + 1e-6km, 0°)
+  ╠═╡ =#
+
+# ╔═╡ 31d72681-5c68-4708-a493-be1c5f085847
+#=╠═╡
+@test ERA(0°, 0km, 0°) ≉ ERA(1e-5°, 0km + 1.1e-6km, 0°)
+  ╠═╡ =#
 
 # ╔═╡ 7344190c-7989-4b55-b7be-357f7d6b7370
 Base.isnan(era::ERA) = isnan(era.el)
@@ -359,14 +371,55 @@ function Base.show(io::IO,lla::LLA)
 end
 
 # ╔═╡ 3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
-function Base.isapprox(x1::LLA, x2::LLA)
-	x1.alt ≉ x2.alt && return false
+function Base.isapprox(x1::LLA, x2::LLA; angle_atol = deg2rad(1e-5), alt_atol = 1e-3, atol = nothing, kwargs...)
+	@assert atol isa Nothing "You can't provide an absolute tolerance directly for comparing `LLA` objects, please use the independent kwargs `angle_atol` [radians] for the longitude and latitude atol and `alt_atol` [m] for the altitude one"
+	# Altitude, we default to an absolute tolerance of 1mm for isapprox
+	isapprox(x1.alt,x2.alt; atol = alt_atol, kwargs...) || return false
+	# Angles, we default to a default tolerance of 1e-5 degrees for isapprox
+	≈(x,y) = isapprox(x,y;atol = angle_atol, kwargs...)
 	# Don't care about different longitude if latitude is ±90°
 	abs(x1.lat) ≈ π/2 && abs(x2.lat) ≈ π/2 && return true
 	# Return true if all the lat and lon are matching
 	x1.lat ≈ x2.lat && (x1.lon ≈ x2.lon || abs(x1.lon) ≈ abs(x2.lon) ≈ π) && return true
 	return false
 end
+
+# ╔═╡ 16782c72-ecb1-48ec-8510-78e2e0689a10
+function Base.isapprox(x1::ERA, x2::ERA; angle_atol = deg2rad(1e-5), range_atol = 1e-3, atol = nothing, kwargs...)
+	@assert atol isa Nothing "You can't provide an absolute tolerance directly for comparison between `ERA` types, please use the independent kwargs `angle_atol` [radians] for the elevation/azimuth atol and `range_atol` [m] for the range one"
+
+	# Range, we use 1mm as default tolerance
+	Base.isapprox(x1.r,x2.r; atol = range_atol, kwargs...) || return false
+	
+	# Angles, we default to a default tolerance of 1e-5 degrees for isapprox
+	≈(x,y) = isapprox(x,y;atol = angle_atol, kwargs...)
+	≉(x,y) = !≈(x,y)
+	x1.el ≈ x2.el || return false
+	
+	# Don't care about different azimuth if elevation is 90°
+	x2.el ≉ π/2 && x1.az ≉ x2.az && return false
+	return true
+end
+
+# ╔═╡ cbbff280-8ad7-4589-8dff-1d401f872233
+#=╠═╡
+@test LLA(0°, 0°, 0km) ≉ LLA(1.1e-5°, 0°, 0km)
+  ╠═╡ =#
+
+# ╔═╡ f7ee6d27-3775-4508-8f51-c61199247e0c
+#=╠═╡
+@test LLA(0°, 0°, 0km) ≈ LLA(1e-5°, 0°, 0km)
+  ╠═╡ =#
+
+# ╔═╡ 1a431285-970d-456f-adfb-2e25ad405a5c
+#=╠═╡
+@test LLA(0°, 0°, 0km) ≈ LLA(1e-5°, 1e-5°, 1e-6km)
+  ╠═╡ =#
+
+# ╔═╡ 337271c9-7263-40e7-a444-251c03feb2f2
+#=╠═╡
+@test LLA(0°, 0°, 0km) ≉ LLA(1e-5°, 1e-5°, 1.1e-6km)
+  ╠═╡ =#
 
 # ╔═╡ 528beffe-0707-4661-8970-def1b1e00ea5
 Base.isnan(lla::LLA) = isnan(lla.lat)
@@ -501,6 +554,7 @@ ERA(1,1,NaN) |> isnan
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
@@ -513,6 +567,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
+BenchmarkTools = "~1.3.2"
 DocStringExtensions = "~0.8.6"
 Parameters = "~0.12.3"
 PlutoDevMacros = "~0.4.5"
@@ -530,7 +585,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0-rc2"
 manifest_format = "2.0"
-project_hash = "f4f691a188e4891732c341a2ad2b10c4b4e49454"
+project_hash = "bc02f942c90146412e88e996622f9470b9670e98"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -559,6 +614,12 @@ version = "1.0.1"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "d9a9701b899b30332bbcb3e1679c41cce81fb0e8"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.3.2"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -890,6 +951,10 @@ version = "1.3.1"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
 [[deps.Proj4]]
 deps = ["CEnum", "CoordinateTransformations", "PROJ_jll", "StaticArrays"]
 git-tree-sha1 = "5f15f1c647b563e49f655fbbfd4e2ade24bd3c64"
@@ -1104,11 +1169,19 @@ version = "17.4.0+0"
 # ╠═f207d849-ebff-4e6c-95bb-50693cb7c9b6
 # ╠═3033d5c1-d8e0-4d46-0001-7dec4ff7afbd
 # ╠═3033d5c1-d8e0-4d46-a4b9-7dec4ff7afbd
+# ╠═cbbff280-8ad7-4589-8dff-1d401f872233
+# ╠═f7ee6d27-3775-4508-8f51-c61199247e0c
+# ╠═1a431285-970d-456f-adfb-2e25ad405a5c
+# ╠═337271c9-7263-40e7-a444-251c03feb2f2
 # ╠═528beffe-0707-4661-8970-def1b1e00ea5
 # ╟─f951805e-515a-475f-893f-bb8b968e425c
 # ╟─86ae20a9-e69c-4d63-9119-395449e9ac09
 # ╠═9be2fd5c-4b6c-4e13-b2aa-fb7120a504b7
 # ╠═16782c72-ecb1-48ec-8510-78e2e0689a10
+# ╠═39af2a26-e882-4596-846c-4699c1a0f3a2
+# ╠═4dc4e619-9d2e-45ea-9072-baef5680ef28
+# ╠═948e5814-60ca-4269-ae33-542b835b4116
+# ╠═31d72681-5c68-4708-a493-be1c5f085847
 # ╠═7344190c-7989-4b55-b7be-357f7d6b7370
 # ╠═11938cb6-46b3-0001-96c0-ef6424d1d0db
 # ╠═11938cb6-46b3-0002-96c0-ef6424d1d0db
