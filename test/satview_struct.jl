@@ -16,12 +16,12 @@ import TelecomUtils: wgs84_ellipsoid
     end
 
     @testset "Get Pointing/LLA/ECEF" begin
-        lla_ref = LLA(1°, 1°, 0)
+        lla_ref = LLA(1°, 1°, 1km)
         ecef_ref = lla2ecef(lla_ref)
         ref_uv = get_pointing(sv, lla_ref)
         @test ref_uv ≈ get_pointing(sv, ecef_ref)
-        @test get_lla(sv, ref_uv) ≈ lla_ref
-        @test get_ecef(sv, ref_uv) ≈ ecef_ref     
+        @test get_lla(sv, ref_uv;h = lla_ref.alt) ≈ lla_ref
+        @test get_ecef(sv, ref_uv;h = lla_ref.alt) ≈ ecef_ref     
     end
 
     @testset "Get ERA" begin

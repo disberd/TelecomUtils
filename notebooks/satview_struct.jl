@@ -364,7 +364,7 @@ function get_lla(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 	else
 		pointing
 	end
-	lla = LLAfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv)
+	lla = LLAfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv, h)
 end
 
 # ╔═╡ 1f27b72f-9a3b-4732-a98e-d216af067072
@@ -390,8 +390,26 @@ function get_ecef(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 	else
 		pointing
 	end
-	lla = ECEFfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv)
+	ecef = ECEFfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv,h)
 end
+
+# ╔═╡ fb1026c2-4314-44fc-958e-850dbcca2470
+#=╠═╡
+let    
+	sp_ell = SphericalEllipsoid()
+    lla2ecef = ECEFfromLLA(sp_ell)
+
+    em = EarthModel(sp_ell)
+    sat_lla = LLA(0,0,700km)
+
+    sv = SatView(sat_lla, em)
+	lla_ref = LLA(1°, 1°, 1km)
+	ecef_ref = lla2ecef(lla_ref)
+	ref_uv = get_pointing(sv, lla_ref)
+	@test get_lla(sv, ref_uv; h = lla_ref.alt) ≈ lla_ref
+	@test get_ecef(sv, ref_uv; h = lla_ref.alt) ≈ ecef_ref
+end
+  ╠═╡ =#
 
 # ╔═╡ 8bc60d8d-7b54-4dce-a3e4-e336c0b16d4e
 # ╠═╡ skip_as_script = true
@@ -1362,6 +1380,7 @@ version = "17.4.0+0"
 # ╠═1758748c-fa4b-4414-a05d-a32970c7a94b
 # ╠═cc1c1137-a253-49de-8293-5819236a00cf
 # ╠═1f7bf45c-b33b-4bfe-b82d-05b908ce375e
+# ╠═fb1026c2-4314-44fc-958e-850dbcca2470
 # ╠═1f27b72f-9a3b-4732-a98e-d216af067072
 # ╠═948cc7a1-d85e-4cfe-b2e4-e047bcbac305
 # ╠═8bc60d8d-7b54-4dce-a3e4-e336c0b16d4e
