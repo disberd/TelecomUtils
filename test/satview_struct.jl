@@ -20,7 +20,7 @@ import TelecomUtils: wgs84_ellipsoid
         ecef_ref = lla2ecef(lla_ref)
         ref_uv = get_pointing(sv, lla_ref)
         @test ref_uv ≈ get_pointing(sv, ecef_ref)
-        # @test get_lla(sv, ref_uv) ≈ lla_ref # This is broken because the resulting altitude difference is > √(eps)
+        @test get_lla(sv, ref_uv) ≈ lla_ref
         @test get_ecef(sv, ref_uv) ≈ ecef_ref     
     end
 
