@@ -788,6 +788,33 @@ let
 end
   ╠═╡ =#
 
+# ╔═╡ f836fc27-91aa-49f6-a67c-94f8c1f4a607
+md"""
+## LLA <-> UV
+"""
+
+# ╔═╡ 7eff4ca6-5e48-49ac-95cc-5256f8f4e0f7
+#=╠═╡
+let
+	sat_lla = LLA(0°, 0°, 600km)
+	target_lla = [
+		LLA(0°, 1°, 0km), # Right - U Negative, V 0
+		LLA(1°, 0°, 0km), # Top - U 0, V Positive
+		LLA(0°, -1°, 0km), # Left - U Positive, V 0
+		LLA(-1°, 0°, 0km), # Bottom - U 0, V Negative
+	]
+	target_uv = map(target_lla) do lla
+		UVfromLLA(sat_lla; ellipsoid=SphericalEllipsoid())(lla) |> normalize
+	end
+	@test all([
+		target_uv[1] == [-1,0],
+		target_uv[2] == [0,1],
+		target_uv[3] == [1,0],
+		target_uv[4] == [0,-1],
+	])
+end
+  ╠═╡ =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1512,5 +1539,7 @@ version = "17.4.0+0"
 # ╠═61ace485-dc58-42dd-a58f-1cd13e1f6444
 # ╠═76da884a-60ff-4b24-bd1f-7d5d8824ab35
 # ╠═b07c6df9-586e-4a4c-be16-cc4ac7b1f704
+# ╟─f836fc27-91aa-49f6-a67c-94f8c1f4a607
+# ╠═7eff4ca6-5e48-49ac-95cc-5256f8f4e0f7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
