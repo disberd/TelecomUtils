@@ -726,7 +726,7 @@ begin
 	
 	function (trans::UVfromLLA)(lla::LLA, ex::ExtraOutput)
 		ecef = ECEFfromLLA(trans.ellipsoid)(lla)
-		uv, wnd = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
+		uv, r = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
 	end
 	# Single output method
 	(trans::UVfromLLA)(lla::LLA) = trans(lla,ExtraOutput())[1]
