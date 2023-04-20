@@ -46,5 +46,10 @@ import TelecomUtils: earth_intersection
         @test target_uv[2] == [0,1]
         @test target_uv[3] == [1,0]
         @test target_uv[4] == [0,-1]
+
+
+        # We now test that targets behind the reference direction are not visible (NaN)
+        target_uv = UVfromLLA(LLA(0,0,600km))(LLA(0,0,610km))
+        @test all(isnan.(target_uv))
     end
 end

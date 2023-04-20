@@ -678,6 +678,9 @@ begin
 		# Find the coordinates in the West-North-Down CRS
 		wnd = trans.R * pdiff
 		
+		# If the target is behind (so D is negative), we assume that it's not visible
+		wnd[3] < 0 && return SA_F64[NaN,NaN], NaN
+		
 		# Find the slant range between the satellite and the point
 		r = norm(wnd)
 		
@@ -812,6 +815,16 @@ let
 		target_uv[3] == [1,0],
 		target_uv[4] == [0,-1],
 	])
+end
+  ╠═╡ =#
+
+# ╔═╡ cbafedbf-adea-4249-b681-fc2f4816ebb9
+#=╠═╡
+let
+	sat_lla = LLA(0°, 0°, 600km)
+	target_lla = LLA(0°, 0°, 610km)
+	target_uv =	UVfromLLA(sat_lla; ellipsoid=SphericalEllipsoid())(target_lla)
+	@test all(isnan.(target_uv))
 end
   ╠═╡ =#
 
