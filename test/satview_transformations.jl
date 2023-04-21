@@ -1,4 +1,5 @@
 import Unitful: °, km
+using Rotations
 import LinearAlgebra: normalize
 import TelecomUtils: earth_intersection
 
@@ -18,6 +19,8 @@ import TelecomUtils: earth_intersection
         n̂ = normalize(-sat_ecef)
         intersection_ecef = earth_intersection(n̂, sat_ecef, sp_ell.a, sp_ell.b)
         @test intersection_ecef ≈ [sp_ell.a, 0, 0]
+        # Test that if the direction is opposite of the earth the result is NaN
+        @test all(map(isnan,earth_intersection(-n̂, sat_ecef, sp_ell.a, sp_ell.b)))
     end
 
     ### Compute sat positions ###
@@ -49,7 +52,13 @@ import TelecomUtils: earth_intersection
 
 
         # We now test that targets behind the reference direction are not visible (NaN)
-        target_uv = UVfromLLA(LLA(0,0,600km))(LLA(0,0,610km))
+        sat_lla = LLA(0,0,600km)
+        target_lla = LLA(0,0,610km)
+        lla2uv = UVfromLLA(sat_lla)
+        target_uv = lla2uv(target_lla)
         @test all(isnan.(target_uv))
+        # We test that if we rotate by 180 degrees around Y the matrix we actually find a valid uv
+        lla2uv = UVfromLLA(lla2uv.origin, RotY(180°) * lla2uv.R, lla2uv.ellipsoid)
+        @test all(map(!isnan, lla2uv(target_lla)))
     end
 end

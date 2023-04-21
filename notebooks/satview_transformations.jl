@@ -378,6 +378,16 @@ begin
 	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
 end
 
+# ╔═╡ 41896117-5597-40e0-b6a1-27bba86398f5
+#=╠═╡
+@benchmark _rotation_matrix(Val(:UVfromECEF), x, y) setup=(x=.2;y=.8)
+  ╠═╡ =#
+
+# ╔═╡ fc816e38-ac19-40d7-a2ab-925b97b48910
+#=╠═╡
+@benchmark map((x,y) -> _rotation_matrix(Val(:UVfromECEF), x, y), x,y) setup=(x = rand(1000);y=rand(1000))
+  ╠═╡ =#
+
 # ╔═╡ ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -589,9 +599,11 @@ function earth_intersection(pointing_ecef,sat_ecef,a,b)
 	t₁,t₂ = _intersection_solutions(pointing_ecef,sat_ecef,a,b)
 	
 	# If no solution exists, t₁ is NaN, so we return a 3d NaN vector
-	isnan(t₁) && return SA_F64[NaN,NaN,NaN]
+	if isnan(t₁) || t₁ <= 0 || t₂ <= 0 
+		return SA_F64[NaN,NaN,NaN]
+	end
 	
-	t = abs(t₁) < abs(t₂) ? t₁ : t₂
+	t = t₁ < t₂ ? t₁ : t₂
 	
 	# Compute the ecef coordinates of the intersectinon on earth
 	ecef = sat_ecef + t*pointing_ecef
@@ -647,7 +659,7 @@ begin
 		# Check that the uv coordinates are valid
 		uv² = sum(uv .^ 2)
 		@assert uv² <= 1 "u² + v² > 1, the given uv coordinate vector is not valid"
-		# Compute the 3d versor identifying the pointing direction from the satellite in WND coordinates
+		# Compute the 3d versor identifying the pointing direction from the satellite in the local CRS coordinates
 		p̂ = SA_F64[uv..., sqrt(1 - uv²)]
 		# Translate the versor in ECEF coordinates
 		n̂ = trans.R * p̂
@@ -673,19 +685,19 @@ begin
 		# If t > t₁ then the earth is blocking the view point so we return NaN
 		
 		# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision
-		!isnan(t₁) && t > t₁+1e-3 && return SA_F64[NaN,NaN], NaN
+		t₁ > 0 && t > t₁+1e-3 && return SA_F64[NaN,NaN], NaN
 		
-		# Find the coordinates in the West-North-Down CRS
-		wnd = trans.R * pdiff
-		
+		# Find the coordinates in the satellite CRS
+		xyz = trans.R * pdiff
+
 		# If the target is behind (so D is negative), we assume that it's not visible
-		wnd[3] < 0 && return SA_F64[NaN,NaN], NaN
+		xyz[3] < 0 && return SA_F64[NaN,NaN], NaN
 		
 		# Find the slant range between the satellite and the point
-		r = norm(wnd)
+		r = norm(xyz)
 		
-		# Normalize the wnd vector
-		uv = SVector(wnd[1],wnd[2]) ./  r
+		# Normalize the xyz vector
+		uv = SVector(xyz[1],xyz[2]) ./  r
 		
 		# Return both the uv coordinates and the slant range
 		return uv, r
@@ -761,13 +773,11 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ 89eb0e56-e1d5-4497-8de2-3eed528f6358
-# ╠═╡ skip_as_script = true
 #=╠═╡
 @benchmark $ECEFfromLLA()($LLA(10°,10°,1000km))
   ╠═╡ =#
 
 # ╔═╡ 61ace485-dc58-42dd-a58f-1cd13e1f6444
-# ╠═╡ skip_as_script = true
 #=╠═╡
 @benchmark $LLAfromECEF()(SA_F64[1e7,1e6,1e6])
   ╠═╡ =#
@@ -790,6 +800,14 @@ let
 	@test invera.el ≈ el && invera.az ≈ az
 end
   ╠═╡ =#
+
+# ╔═╡ 4e2b42d8-cd4f-4e29-b519-b7139a83be02
+md"""
+## Earth Intersection
+"""
+
+# ╔═╡ c9c9402e-c80d-4a31-9a24-f6363be60e7c
+
 
 # ╔═╡ f836fc27-91aa-49f6-a67c-94f8c1f4a607
 md"""
@@ -825,6 +843,20 @@ let
 	target_lla = LLA(0°, 0°, 610km)
 	target_uv =	UVfromLLA(sat_lla; ellipsoid=SphericalEllipsoid())(target_lla)
 	@test all(isnan.(target_uv))
+end
+  ╠═╡ =#
+
+# ╔═╡ c4a101fc-b7d2-41cb-9252-9fbad7811957
+#=╠═╡
+let
+	sp = SphericalEllipsoid()
+	lla2ecef = ECEFfromLLA(sp)
+	sat_lla = LLA(0°, 0°, 600km)
+	sat_ecef = lla2ecef(sat_lla)
+	R = _rotation_matrix(Val(:ECEFfromWND), sat_lla.lat, sat_lla.lon) * RotY(180°)
+	target_lla = LLA(0°, 0°, 610km)
+	target_uv =	UVfromLLA(sat_ecef, R', sp)(target_lla)
+	@test all(map(!isnan,target_uv))
 end
   ╠═╡ =#
 
@@ -1501,6 +1533,8 @@ version = "17.4.0+0"
 # ╟─3cc3b232-01e8-4064-8a2a-abe14aa6e5c0
 # ╠═00d31f8c-dd75-4d8f-83b6-d8e976b040d0
 # ╠═f91fbe7d-137f-4e05-a7c7-0486db54e39e
+# ╠═41896117-5597-40e0-b6a1-27bba86398f5
+# ╠═fc816e38-ac19-40d7-a2ab-925b97b48910
 # ╠═46730818-1bb8-4c79-8b6f-f8cf0188c918
 # ╠═17d1271f-713d-4a85-b6ef-43e2632b74cf
 # ╠═965e7534-cc27-4657-b3cf-5a5b36be2a9c
@@ -1552,7 +1586,11 @@ version = "17.4.0+0"
 # ╠═61ace485-dc58-42dd-a58f-1cd13e1f6444
 # ╠═76da884a-60ff-4b24-bd1f-7d5d8824ab35
 # ╠═b07c6df9-586e-4a4c-be16-cc4ac7b1f704
+# ╟─4e2b42d8-cd4f-4e29-b519-b7139a83be02
+# ╠═c9c9402e-c80d-4a31-9a24-f6363be60e7c
 # ╟─f836fc27-91aa-49f6-a67c-94f8c1f4a607
 # ╠═7eff4ca6-5e48-49ac-95cc-5256f8f4e0f7
+# ╠═cbafedbf-adea-4249-b681-fc2f4816ebb9
+# ╠═c4a101fc-b7d2-41cb-9252-9fbad7811957
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
