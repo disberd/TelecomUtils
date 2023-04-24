@@ -30,6 +30,7 @@ begin
 	using PlutoTest
 	using PlutoExtras
 	using PlutoPlotly
+	using PlutoUI
 end
   ╠═╡ =#
 
@@ -85,8 +86,8 @@ We want to define a SatView mutable struct that represents a satellite and can b
 # ╔═╡ e469d967-79e4-4ef2-b635-51a183cb12e7
 begin
 	"""
-	SatView(lla::LLA,earthmodel::EarthModel)
-	SatView(ecef::StaticVector{3},earthmodel::EarthModel)
+	SatView_Old(lla::LLA,earthmodel::EarthModel)
+	SatView_Old(ecef::StaticVector{3},earthmodel::EarthModel)
 Object representing the instantaneous position of a satellite and used to compute various view angles to and from points on ground, as well as inverse geodesic computations.
 
 # Fields
@@ -97,7 +98,7 @@ Doing so will enforce the same Ellipsoid is shared between all satellites even w
 
 See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_distance_on_earth`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
 	"""
-	mutable struct SatView
+	mutable struct SatView_Old
 		"ECEF coordinates of the current satellite position"
 		ecef::SVector{3,Float64}
 		"LLA coordinates of the current satellite position"
@@ -109,20 +110,20 @@ See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref
 	end
 
 	# Custom constructor
-	function SatView(lla::LLA,em::EarthModel)
+	function SatView_Old(lla::LLA,em::EarthModel)
 		ecef = ECEFfromLLA(em.ellipsoid)(lla)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
-		SatView(ecef,lla,em,R)
+		SatView_Old(ecef,lla,em,R)
 	end
-	function SatView(ecef::StaticVector{3},em::EarthModel)
+	function SatView_Old(ecef::StaticVector{3},em::EarthModel)
 		lla = LLAfromECEF(em.ellipsoid)(ecef)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
-		SatView(ecef,lla,em,R)
+		SatView_Old(ecef,lla,em,R)
 	end
 end
 
 # ╔═╡ 4794b9dc-4297-402b-94a2-ed686584bb09
-function Base.getproperty(sv::SatView, name::Symbol)
+function Base.getproperty(sv::SatView_Old, name::Symbol)
 	if name ∈ (:ellipsoid, :geod)
 		return getfield(getfield(sv,:earthmodel),name)
 	else
@@ -131,7 +132,7 @@ function Base.getproperty(sv::SatView, name::Symbol)
 end
 
 # ╔═╡ dd8d119d-550c-4217-923d-43aaf2b8327b
-function Base.setproperty!(sv::SatView, name::Symbol, x)
+function Base.setproperty!(sv::SatView_Old, name::Symbol, x)
 	if name ∈ (:ellipsoid, :geod)
 		return setproperty!(getfield(sv,:earthmodel),name, x)
 	else
@@ -139,26 +140,166 @@ function Base.setproperty!(sv::SatView, name::Symbol, x)
 	end
 end
 
+# ╔═╡ 9e65ad17-95bd-46fa-bc18-9d5e8c501d9a
+md"""
+## face_rotation
+"""
+
+# ╔═╡ f1d1295e-7fa1-44d0-bdac-8b7830da8a61
+@enum Faces begin
+	PositiveX = 1
+	PositiveY = 2
+	PositiveZ = 3
+	NegativeX = -1
+	NegativeY = -2
+	NegativeZ = -3
+end
+
+# ╔═╡ e1a755fc-8164-4a94-8bff-494f8d95d2f2
+to_face(n::Int) = Faces(n)
+
+# ╔═╡ 9e8f0786-1daa-4b9e-9172-fc0767582c7e
+function to_face(s::Symbol)
+	s === :PositiveX && return PositiveX
+	s === :PositiveY && return PositiveY
+	s === :PositiveZ && return PositiveZ
+	s === :NegativeX && return NegativeX
+	s === :NegativeY && return NegativeY
+	s === :NegativeZ && return NegativeZ
+	error("Unrecognized")
+end
+
+# ╔═╡ 93222642-f2a6-4de7-8c92-21c96ef009a4
+function face_rotation(face::Faces)::RotMatrix{3, Float64}
+	face === PositiveZ && return one(RotMatrix{3, Float64}) # No Rotation
+	face === NegativeZ && return RotY(180°)
+	face === PositiveX && return RotY(+90°)
+	face === NegativeX && return RotY(-90°)
+	face === PositiveY && return RotX(-90°)
+	face === NegativeY && return RotX(+90°)
+end
+
+# ╔═╡ cb0b070b-f70a-458e-bf72-0a4d2e93ec41
+face_rotation(face) = face_rotation(to_face(face))
+
+# ╔═╡ 28c868ca-9954-47ff-8949-a41fb7fc6d41
+#=╠═╡
+@benchmark map(face_rotation, x) setup=(x=rand(Symbol.(instances(Faces)),1000))
+  ╠═╡ =#
+
+# ╔═╡ 4217aa7d-f404-44e9-9d6a-4becb94b97e3
+# ╠═╡ skip_as_script = true
+#=╠═╡
+@code_warntype face_rotation(:PositiveZ)
+  ╠═╡ =#
+
+# ╔═╡ 5dc71a85-a20d-4448-98b4-5065a249df1d
+md"""
+## ReferenceView
+"""
+
+# ╔═╡ 06fd50d4-c6fe-449d-8a64-878cf4756345
+typeof((x=0.0, y = 0.0, z = 0.0))
+
+# ╔═╡ 67dad6aa-c91b-4aeb-ba52-dec60b093555
+let
+	R = RotZYX(135°,90°, 0)
+	R * SA_F64[0,0,1]
+end
+
+# ╔═╡ c6ee08ba-3546-48ea-9801-edc00dfd25f0
+begin
+	"""
+	ReferenceView(lla::LLA,earthmodel::EarthModel)
+	ReferenceView(ecef::StaticVector{3},earthmodel::EarthModel)
+Object representing the instantaneous position of a satellite and used to compute various view angles to and from points on ground, as well as inverse geodesic computations.
+
+# Fields
+$TYPEDFIELDS
+
+If multiple satellites have to be tracked, the `EarthModel` instance `earthmodel` should be generated once and then passed to all the SatView instances to ensure that all the satellites are referring to the same earth model.\\
+Doing so will enforce the same Ellipsoid is shared between all satellites even when it is changed from one of the SatView instances.
+
+See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_distance_on_earth`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
+	"""
+	Base.@kwdef mutable struct ReferenceView{T}
+		"ECEF coordinates of the current satellite position"
+		ecef::SVector{3,Float64}
+		"LLA coordinates of the current satellite position"
+		lla::LLA
+		"Reference EarthModel used for the projections and for the geodesic computations"
+		earthmodel::EarthModel
+		"Rotation Matrix to go from the nadir-pointing CRS (WND) to the ECEF CRS"
+		R::RotMatrix3{Float64}
+		"Rotation angle about the z axis to bring the default satellite CRS (WND) to the current one"
+		rot_z::Float64 = 0
+		"Rotation angle about the y axis to bring the default satellite CRS (WND) to the current one"
+		rot_y::Float64 = 0
+		"Rotation angle about the x axis to bring the default satellite CRS (WND) to the current one"
+		rot_x::Float64 = 0
+		"Face of the satellite used for the pointing computations"
+		face::Faces = PositiveZ
+	end
+
+	const SatView = ReferenceView{:Satellite}
+	const UserView = ReferenceView{:User}
+
+	function _refview_rotation(s::Symbol)
+		s === :Satellite && return :ECEFfromWND
+		s === :User && return :ECEFfromENU
+		error("The provided type of ReferenceView $s is not supported")
+	end
+
+	# Custom constructor
+	function ReferenceView{T}(lla::LLA,em::EarthModel) where T
+		ecef = ECEFfromLLA(em.ellipsoid)(lla)
+		R = _rotation_matrix(_refview_rotation(T), lla.lat, lla.lon)
+		ReferenceView{T}(;ecef,lla,earthmodel=em,R)
+	end
+	function ReferenceView{T}(ecef::StaticVector{3},em::EarthModel) where T
+		lla = LLAfromECEF(em.ellipsoid)(ecef)
+		R = _rotation_matrix(_refview_rotation, lla.lat, lla.lon)
+		ReferenceView{T}(;ecef,lla,earthmodel=em,R)
+	end
+end
+
+# ╔═╡ a34ca715-e7f2-4fa7-ba94-8ad3f9b1f4cd
+function Base.getproperty(sv::ReferenceView, name::Symbol)
+	if name ∈ (:ellipsoid, :geod)
+		return getfield(getfield(sv,:earthmodel),name)
+	else
+		return getfield(sv, name)
+	end
+end
+
+# ╔═╡ 227c0f3e-6e45-48ac-92d4-d1c1c730e4e0
+function Base.setproperty!(sv::V, name::Symbol, x) where V <: ReferenceView
+	error("You can't change fields of $V directly, use change_position! or change_attitude!")
+end
+
+# ╔═╡ d02cf439-9be3-4b78-97cf-58b200220ffe
+ReferenceView{:Satellite}
+
 # ╔═╡ 6eb9424e-3dd2-46d4-b4d2-81596bb81668
 # ╠═╡ skip_as_script = true
 #=╠═╡
 em = EarthModel()
   ╠═╡ =#
 
+# ╔═╡ c89bf8d0-366c-4598-9b1f-882fb6c629bc
+#=╠═╡
+SatView(LLA(0,0,100km), em)
+  ╠═╡ =#
+
+# ╔═╡ 371df82a-bb34-48ec-9063-a0af88c630d3
+#=╠═╡
+UserView(LLA(0,0,100km), em)
+  ╠═╡ =#
+
 # ╔═╡ 170f2914-fdf9-46c8-a8e0-9130b046bd60
 # ╠═╡ skip_as_script = true
 #=╠═╡
-sv = SatView(LLA(0,0,100km), em)
-  ╠═╡ =#
-
-# ╔═╡ e28cbfc7-408e-49b5-9aeb-bd01c32fba46
-# ╠═╡ skip_as_script = true
-#=╠═╡
-let
-	sv = SatView(LLA(0,0,100km), EarthModel())
-	sv.ellipsoid = wgs84_ellipsoid
-	sv.geod
-end
+sv = SatView_Old(LLA(0,0,100km), em)
   ╠═╡ =#
 
 # ╔═╡ 5f1fd82d-f441-4a1b-9840-773a8635d3db
@@ -197,28 +338,176 @@ duplicate computations.
 See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref),
 [`get_ecef`](@ref), [`get_ecef`](@ref).
 	"""
-	function change_position!(sv::SatView, ecef, lla::LLA, R)
+	function change_position!(sv::SatView_Old, ecef, lla::LLA, R)
 		setfield!(sv,:ecef,ecef)
 		setfield!(sv,:lla,lla)
 		setfield!(sv,:R,R)
 		return sv
 	end
-	function change_position!(sv::SatView, lla::LLA)
+	function change_position!(sv::SatView_Old, lla::LLA)
 		ecef = ECEFfromLLA(sv.ellipsoid)(lla)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
 		change_position!(sv, ecef, lla, R)
 	end
-	function change_position!(sv::SatView, ecef::StaticVector{3})
+	function change_position!(sv::SatView_Old, ecef::StaticVector{3})
 		lla = LLAfromECEF(sv.ellipsoid)(ecef)
 		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
 		change_position!(sv, ecef, lla, R)
 	end
 end
 
+# ╔═╡ 12f31d2c-1eac-47bc-bda2-a32395ff8265
+"""
+	R = crs_rotation(;rot_x=0.0, rot_y=0.0, rot_z=0.0)
+Create the z-y'-x'' _intrinsic_ [Tait-Bryan](https://en.wikipedia.org/wiki/Euler_angles#Tait%E2%80%93Bryan_angles) rotation matrix used to transform/rotate a starting CRS to another one.
+This is used within [`ReferenceView`](@ref) to account for satellite attitude or user pointing when defining the final satellite/user centric CRS.
+
+Taking as example a `SatView`, the default CRS without any attitude rotation is always the `WND` one centered on the satellite, with the `X` axis pointing towards West, `Y` axis towards north and `Z` axis towards nadir.
+
+Let's call this default CRS as `WND` and let's assume to have a satellite in a LEO orbit with an inclination of `70` degrees.
+Let's assume that the satellite is at its ascending node, and that we want to rotate the CRS of the satellite so that the `Y` axis points in the direction of propagation. To create this new CRS that we will call `XYZ`, we have to rotate the `WND` one by `20` degrees clock-wise around the `Z` axis of the `WND` CRS.
+
+Assuming to have a point `xyz` in coordinates relative to the `XYZ` CRS, we can express the same point as `wnd` relative to the `WND` CRS with the following equation:
+```
+wnd = crs_rotation(;rot_z=20°) * xyz
+```
+"""
+crs_rotation(;rot_x = 0.0, rot_y = 0.0, rot_z = 0.0) = RotZYX(rot_z,rot_y,rot_x)
+
+# ╔═╡ 3c2781b8-e8df-446f-95ed-597112edabec
+begin
+	"""
+	change_position!(rv::ReferenceView, ecef, lla::LLA, R, rot_z, rot_x, rot_y)
+	change_position!(rv::ReferenceView, lla::LLA; rot_z = 0.0, rot_y = 0.0, rot_x = 0.0)
+	change_position!(rv::ReferenceView, ecef::StaticVector{3}; rot_z = 0.0, rot_y = 0.0, rot_x = 0.0)
+Change the position of a [`ReferenceView`](@ref) object `rv`, also returning as output the modified
+`rv`.  The function mutates the `ecef`, `lla`, `R`, `rot_z`, `rot_y`, `rot_x` fields of the `rv`
+object with the values provided as arguments (when using the 1st method above).\\
+If only `ecef` or `lla` coordinates are provided as positional argument and the
+CRS rotations are provided as kwargs (2nd and 3rd method above), the remaining
+two arguments are computed automatically.
+
+One would normally use either the 2nd or 3rd method so that the two missing components are
+correctly computed by the function.\\
+The first method avoids computations but does not validate that provided inputs are
+correct/consistent and refer to the same position in space. For this reason the first method should
+only be used if those values are correctly pre-computed elsewhere and one wants to avoid the
+duplicate computations. 
+
+Note: `rot_z`, `rot_y` and `rot_x` are used to obtain the actual reference CRS
+to use for the pointing computations. These angles are used to transform the
+default CRS (which is WND for SatView and ENU for UserView) into the desired
+CRS. This is done performing a z-y-x _intrinsic_ rotation of the default CRS following the
+[Tait-Bryan
+Definition](https://en.wikipedia.org/wiki/Euler_angles#Tait%E2%80%93Bryan_angles).
+
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref),
+[`get_ecef`](@ref), [`get_ecef`](@ref).
+	"""
+	function change_position!(rv::ReferenceView, ecef, lla::LLA, R, rot_z, rot_y, rot_x)
+		setfield!(rv,:ecef,ecef)
+		setfield!(rv,:lla,lla)
+		setfield!(rv,:R,R)
+		setfield!(rv,:rot_z,rot_z)
+		setfield!(rv,:rot_y,rot_y)
+		setfield!(rv,:rot_x,rot_x)
+		return rv
+	end
+	
+	function change_position!(rv::ReferenceView, ecef::StaticVector{3}, lla::LLA; rot_z = 0.0, rot_y = 0.0, rot_x = 0.0)
+		R = _rotation_matrix(:ECEFfromUV, lla.lat, lla.lon)
+		R *= crs_rotation(;rot_z, rot_y, rot_x)
+		change_position!(rv, ecef, lla, R, rot_z, rot_y, rot_x)
+	end
+	function change_position!(rv::ReferenceView, lla::LLA; kwargs...)
+		ecef = ECEFfromLLA(rv.ellipsoid)(lla)
+		change_position!(rv, ecef, lla;kwargs...)
+	end
+	function change_position!(rv::ReferenceView, ecef::StaticVector{3}; kwargs...)
+		lla = LLAfromECEF(rv.ellipsoid)(ecef)
+		change_position!(rv, ecef, lla;kwargs...)
+	end
+end
+
+# ╔═╡ b17a4660-3938-4816-8182-6feae471b50d
+#=╠═╡
+let
+	rot_z = rot_x = rot_y = 0.0
+	rv = SatView(LLA(0,0,600km), em)
+	new_lla = LLA(0.1,0,600km)
+	new_ecef = ECEFfromLLA(em.ellipsoid)(new_lla)
+	_R = _rotation_matrix(:ECEFfromUV, new_lla.lat, new_lla.lon)
+	R = _R * crs_rotation(;rot_z, rot_y, rot_x)
+	@benchmark change_position!($rv, $new_ecef, $new_lla, $R, $rot_z, $rot_y, $rot_x)
+end
+  ╠═╡ =#
+
+# ╔═╡ cddcb68d-5400-4cb9-90ef-b3e149900f8a
+#=╠═╡
+let
+	rot_z = rot_x = rot_y = 0.0
+	rv = SatView(LLA(0,0,600km), em)
+	new_lla = LLA(0.1,0,600km)
+	new_ecef = ECEFfromLLA(em.ellipsoid)(new_lla)
+	_R = _rotation_matrix(:ECEFfromUV, new_lla.lat, new_lla.lon)
+	R = _R * crs_rotation(;rot_z, rot_y, rot_x)
+	@benchmark change_position!($rv, $new_ecef, $new_lla)
+end
+  ╠═╡ =#
+
+# ╔═╡ 64919bbb-3b52-48e1-a7ea-c0916c47994d
+#=╠═╡
+let
+	rv = SatView(LLA(0,0,600km), em)
+	xyz = SA_F64[0,100,0] # 100m towards the direction of propagation
+	wnd = crs_rotation(;rot_z = 20°) * xyz
+end
+  ╠═╡ =#
+
+# ╔═╡ 5c1d0beb-c00c-40a8-b255-c887be99e706
+md"""
+## Change Attitude
+"""
+
+# ╔═╡ f127481d-c60e-43d0-ab9f-4d4f35984015
+function change_attitude!(rv::ReferenceView; rot_z = 0.0, rot_y = 0.0, rot_x = 0.0)
+	(;ecef, lla) = rv
+	change_position!(rv, ecef, lla ;rot_z, rot_y, rot_x)
+end
+
+# ╔═╡ 3a745709-8f5b-4f22-848a-2f9754ab27d8
+#=╠═╡
+let
+	sat_lla = LLA(0°, 0°, 600km)
+	rv = SatView(sat_lla, em)
+	wnd_R = rv.R
+	sat_ecef = rv.ecef
+	wnd2ecef = ECEFfromWND(rv.ecef, wnd_R, em.ellipsoid)
+	# Compute the ECEF position of a point 100km below the satellite
+	ref_ecef = wnd2ecef(SA_F64[0,0,100e3])
+	## Now we change the attitude of the satellite
+	# 90 degrees around the X axis means that the ref point should be towards the positive Y axis 
+	change_attitude!(rv; rot_x = deg2rad(90))
+	@test WNDfromECEF(rv.ecef, rv.R', em.ellipsoid)(ref_ecef) ≈ SA_F64[0,100e3,0]
+	
+	# 90 degrees around the Y axis means that the ref point should be towards -X
+	change_attitude!(rv; rot_y = deg2rad(90))
+	@test WNDfromECEF(rv.ecef, rv.R', em.ellipsoid)(ref_ecef) ≈ SA_F64[-100e3,0,0]
+
+	# 90 degrees around the Z and 90 degrees around the Y axis means that the ref point should be towards -X
+	change_attitude!(rv; rot_z = deg2rad(90), rot_y = deg2rad(90))
+	@test WNDfromECEF(rv.ecef, rv.R', em.ellipsoid)(ref_ecef) ≈ SA_F64[-100e3,0,0]
+	
+	# 45 degrees around the Z and 45 degrees around the Y axis means that the ref point should be at 45 degrees between the -X and +Z
+	change_attitude!(rv; rot_z = deg2rad(45), rot_y = deg2rad(45))
+	@test WNDfromECEF(rv.ecef, rv.R', em.ellipsoid)(ref_ecef) ≈ SA_F64[-√(100e3^2/2),0,√(100e3^2/2)]
+end
+  ╠═╡ =#
+
 # ╔═╡ f77dcbcd-f042-4f7c-b97f-de63637229d0
 # ╠═╡ skip_as_script = true
 #=╠═╡
-@benchmark change_position!($sv,$(SA_F64[1e7,0,0]))
+@benchmark change_position!($sv,SA_F64[1e7,0,0])
   ╠═╡ =#
 
 # ╔═╡ 78a8e7a4-333d-44ca-a438-fd85d7078300
@@ -230,7 +519,28 @@ end
 # ╔═╡ 709c44c8-c580-4cf7-8376-9c513eb3bd53
 # ╠═╡ skip_as_script = true
 #=╠═╡
-@benchmark change_position!($sv,LLA(0,0,100km))
+let
+	sv = SatView_Old(LLA(0,0,600km), em)
+	@benchmark change_position!($sv,LLA(0,0,100km))
+end
+  ╠═╡ =#
+
+# ╔═╡ b996bcea-b4f4-47fa-aa8b-39cebcf1600e
+#=╠═╡
+let
+	lla = LLA(0,0,600km)
+	@benchmark _rotation_matrix(:ECEFfromUV, $lla.lat, $lla.lon)
+end
+  ╠═╡ =#
+
+# ╔═╡ b4746c71-ba12-4729-89a9-e337d6c8708f
+#=╠═╡
+let
+	# This benchmark is skewed, for some reason the call to _rotation_matrix from this notebook is allocating. See previous cell
+	sv = SatView(LLA(0,0,600km), em)
+	@benchmark change_position!($sv,LLA(0,0,100km))
+	# @time change_position!(sv,LLA(0,0,100km))
+end
   ╠═╡ =#
 
 # ╔═╡ 84769564-8ba8-46f5-b494-b0689d9abd65
@@ -247,15 +557,15 @@ md"""
 	get_range(sv::SatView,uv::Tuple{<:Number,<:Number},h::Real = 0.0)
 Get the range [in m] between the satellite and a given point identified by the uv pointing and the reference altitude above the ellipsoid.
 """
-function get_range(sv::SatView,uv::StaticVector{2,<:Number},h::Real = 0.0)
+function get_range(sv::SatView_Old,uv::StaticVector{2,<:Number},h::Real = 0.0)
 	# Find the ecef coordinate of the target point on earth
-	ecef = ECEFfromUV(sv.ecef, sv.R, sv.ellipsoid)(uv,h)
+	ecef = ECEFfromUV(sv.ecef, sv.R, sv.ellipsoid)(uv;h)
 	# Return the distance betwteen the satellite and the point
 	return norm(ecef-sv.ecef)
 end
 
 # ╔═╡ 7a75d351-8583-455f-89c4-2d50cf79ea96
-get_range(sv::SatView,uv::Tuple{<:Number,<:Number},args...) = get_range(sv,SVector(uv),args...)
+get_range(sv::SatView_Old,uv::Tuple{<:Number,<:Number},args...) = get_range(sv,SVector(uv),args...)
 
 # ╔═╡ 556934d8-d3ee-4a43-8f74-0939c5431c6f
 """
@@ -269,7 +579,7 @@ If called with an instance of the `ExtraOutput` struct as last argument, it also
 
 See also: [`SatView`](@ref), [`change_position!`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref).
 """
-function get_range(sv::SatView, ecef::StaticVector{3}, ::ExtraOutput)
+function get_range(sv::SatView_Old, ecef::StaticVector{3}, ::ExtraOutput)
 	Δecef = ecef - sv.ecef
 	dist = norm(Δecef)
 	# Find if the target point is below the satellite, we do this by checking the last coordinate of the WND coordinates of the point
@@ -282,10 +592,80 @@ function get_range(sv::SatView, ecef::StaticVector{3}, ::ExtraOutput)
 end
 
 # ╔═╡ 68417643-fa77-4780-9890-b0dac95bdb7f
-get_range(sv::SatView, ecef::StaticVector{3}) = get_range(sv,ecef,ExtraOutput())[1]
+get_range(sv::SatView_Old, ecef::StaticVector{3}) = get_range(sv,ecef,ExtraOutput())[1]
 
 # ╔═╡ da78f52b-30b6-4faf-bcea-b665c10ff4fe
-get_range(sv::SatView, lla::LLA, args...) = get_range(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...)
+get_range(sv::SatView_Old, lla::LLA, args...) = get_range(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...)
+
+# ╔═╡ f8c4783d-7e4b-478c-8c62-584e4c54ffaa
+md"""
+### New
+"""
+
+# ╔═╡ 0cde0a71-7f27-4290-88cd-2cccf627926b
+begin
+"""
+	get_range(rv::ReferenceView,uv::Point2D; h::Real = 0.0, face = rv.face, R = nothing)
+Get the range [in m] between the reference view (Satellite or User) and a given point identified by the uv pointing and the reference altitude `h` above the ellipsoid.
+
+The pointing is assumed to be reffered to the specified `face` of the `ReferenceView`. When the location identified by the provided pointing is not visible either because it's blocked by earth or because it's in a direction not visible from the specified `face`, `NaN` is returned.
+
+The kwarg `R` represents the 3D Rotation Matrix that applied to the ECEF CRS, aligns it (just in terms of rotation, not of origin) with the CRS of the Satellite. By default (if `R === nothing`) this rotation matrix is computed based on the rotation matrix of the `rv` object and on the selected reference face.
+"""
+function get_range(sv::ReferenceView,uv::Point2D, eo::ExtraOutput; h::Real = 0.0, face = sv.face, R = nothing)
+	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
+	# Find the ecef coordinate of the target point on earth
+	ecef, r = ECEFfromUV(sv.ecef, _R', sv.ellipsoid)(uv, eo;h)
+	# Return the distance betwteen the satellite and the point
+	return r, r * SVector(uv[1], uv[2], sqrt(1 - uv[1]^2 + uv[2]^2))
+end
+get_range(rv, uv::Point2D; kwargs...) = get_range(rv, uv, ExtraOutput(); kwargs...)[1]
+end
+
+# ╔═╡ 8838e53a-163d-4390-87d5-437bb1e3916c
+"""
+	get_range(rv::ReferenceView,lla_or_ecef::Union{LLA, StaticVector{3}}[, ::ExtraOutput]; h::Real = 0.0, face = sv.face, R = nothing)
+
+Get the range [in m] between the satellite and a given point identified either by its LLA or ECEF coordinates. 
+
+If called with an instance of the `ExtraOutput` struct as last argument, it also provides the coordinates of the target point as seen from the satellite reference CRS.
+
+See also: [`ReferenceView`](@ref), [`change_position!`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref).
+"""
+function get_range(sv::ReferenceView, ecef::StaticVector{3}, ::ExtraOutput; face = sv.face, R = nothing)
+	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
+	Δecef = ecef - sv.ecef
+	dist = norm(Δecef)
+	# Find if the target point is below the satellite, we do this by checking the last coordinate of the WND coordinates of the point
+	xyz = _R' * Δecef
+	xyz[3] < 0 && return NaN, xyz
+	# We have to check that the given lla is visible from the satellite, this happens if either there is no intersection with earth in the direction of pointing, or if the first intersection happens for a range greater than th computed one
+	t₁, t₂ = _intersection_solutions(Δecef/dist, sv.ecef, sv.ellipsoid.a, sv.ellipsoid.b)
+	r = (isnan(t₁) || t₁ > dist-1e-5) ? dist : NaN
+	return r, xyz
+end
+
+# ╔═╡ 20f6c0c4-8b86-468b-bcc4-da58ff7bb387
+get_range(rv, ecef::StaticVector{3}; kwargs...) = get_range(rv,ecef,ExtraOutput(); kwargs...)[1]
+
+# ╔═╡ 3d7f28b7-62ca-4b0c-8af3-ae081d27adb7
+get_range(rv, lla::LLA, args...; kwargs...) = get_range(rv,ECEFfromLLA(rv.ellipsoid)(lla),args...; kwargs...)
+
+# ╔═╡ fd3a1dcb-2e64-47f8-a932-452742090ac1
+#=╠═╡
+let
+	sv = SatView(LLA(0,0,600km), em)
+	get_range(sv, (.1,0), ExtraOutput(); h = 100e3, face = :PositiveZ)
+end
+  ╠═╡ =#
+
+# ╔═╡ 3381783a-b6d7-43c7-947d-c1de4437e25b
+#=╠═╡
+let
+	uv = UserView(LLA(0,0,0km), em)
+	get_range(uv, (0,0); h = 100e3)
+end
+  ╠═╡ =#
 
 # ╔═╡ 449b49de-2951-41fc-ba46-89eaa6c52e79
 # ╠═╡ skip_as_script = true
@@ -296,13 +676,23 @@ get_range(sv,LLA(0°,5°,10km),ExtraOutput())
 # ╔═╡ e7443f5b-a1a8-4866-9a64-ce7587465911
 # ╠═╡ skip_as_script = true
 #=╠═╡
-get_range(SatView(LLA(0,0,600km),em),(0,0))
+get_range(SatView_Old(LLA(0,0,600km),em),(0,0))
   ╠═╡ =#
 
-# ╔═╡ 7c07a3c1-c1ec-4b83-b7c6-251edf91273c
-# ╠═╡ skip_as_script = true
+# ╔═╡ f99b984a-b7cf-4318-8f74-aacb644bc146
 #=╠═╡
-@benchmark $get_range($sv,LLA(0,0,10km))
+let
+	sv = SatView(LLA(0,0,600km), em)
+	get_range(sv, (0,0); face = :PositiveZ)
+end
+  ╠═╡ =#
+
+# ╔═╡ b389a1db-c444-481c-b168-3069c7367276
+#=╠═╡
+let
+	sv = SatView(LLA(0,0,600km), em)
+	@benchmark get_range($sv,LLA(0,0,10km))
+end
   ╠═╡ =#
 
 # ╔═╡ 39a1850b-f64a-4157-8f07-d7a78918fea1
@@ -323,7 +713,7 @@ Provide the 2-D angular pointing at which the target point (specified as LLA or 
 
 See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
-function get_pointing(sv::SatView,ecef::StaticVector{3},kind::Symbol=:uv)
+function get_pointing(sv::SatView_Old,ecef::StaticVector{3},kind::Symbol=:uv)
 	uv = UVfromECEF(sv.ecef,sv.R',sv.ellipsoid)(ecef)
 	if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
 		return ThetaPhifromUV()(uv)
@@ -333,39 +723,155 @@ function get_pointing(sv::SatView,ecef::StaticVector{3},kind::Symbol=:uv)
 end
 
 # ╔═╡ a6db34bc-b846-49aa-8d57-fb32cdce1684
-get_pointing(sv::SatView,lla::LLA,args...) = get_pointing(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...)
+get_pointing(sv::SatView_Old,lla::LLA,args...) = get_pointing(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...)
 
-# ╔═╡ 1758748c-fa4b-4414-a05d-a32970c7a94b
-# ╠═╡ skip_as_script = true
-#=╠═╡
-get_pointing(SatView(LLA(0,0,600km),em),LLA(1°,1°,0),:thetaphi)
-  ╠═╡ =#
-
-# ╔═╡ cc1c1137-a253-49de-8293-5819236a00cf
-# ╠═╡ skip_as_script = true
-#=╠═╡
-md"""
-## Get LLA
+# ╔═╡ 83634223-87d0-4c31-801a-af8a7f9f678a
+begin
 """
-  ╠═╡ =#
+	get_pointing(sv::SatView,lla::LLA,kind::Symbol=:uv)
+	get_pointing(sv::SatView,ecef::StaticVector{3},kind::Symbol=:uv)
+Provide the 2-D angular pointing at which the target point (specified as LLA or ECEF) is seen from the satellite.
 
-# ╔═╡ 1f7bf45c-b33b-4bfe-b82d-05b908ce375e
-"""
-	get_lla(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
-Computes the LLA coordinates of a point on earth seen from the satellite identified by `sv`, the angular pointing identified by `pointing` and located at an altitude `h` [m] above the reference Earth ellipsoid of `sv`.
-
-The optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates.
+`kind` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `kind ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
 See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
-function get_lla(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
-	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
-		UVfromThetaPhi()(pointing)
+function get_pointing(sv::ReferenceView,ecef::Point3D, eo::ExtraOutput; pointing_type::Symbol=:uv, face = sv.face, R = nothing)
+	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
+	uv, r = UVfromECEF(sv.ecef,_R,sv.ellipsoid)(ecef, eo)
+	xyz = XYZfromUV()(uv, r)
+	if pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+		return ThetaPhifromUV()(uv), xyz
 	else
-		pointing
+		return uv, xyz
 	end
-	lla = LLAfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv, h)
 end
+
+# Single output version
+get_pointing(sv::ReferenceView, ecef::Point3D; kwargs...) = get_pointing(sv, ecef, ExtraOutput(); kwargs...)[1]
+	
+# LLA version
+get_pointing(sv::ReferenceView,lla::LLA,args...;kwargs...) = get_pointing(sv,ECEFfromLLA(sv.ellipsoid)(lla),args...;kwargs...)
+end
+
+# ╔═╡ 41430ac6-7925-45f0-b3c0-2409744af11c
+
+
+# ╔═╡ 951fc2e2-ada9-4aad-876a-4cbd46200f6c
+#=╠═╡
+@bind test_face let
+	map(Symbol, collect(instances(Faces))) |> Select
+end
+  ╠═╡ =#
+
+# ╔═╡ a93e2354-34d1-4d1d-ac3c-f4c99099820a
+#=╠═╡
+let
+	sat_lla = LLA(0°,0°,600km)
+	sv = SatView(sat_lla, em)
+	directions = (;
+		PositiveZ = LLA(0°,0°,500km),
+		PositiveX = LLA(0°,-1°,600km),
+		PositiveY = LLA(1°,0°,600km),
+		NegativeZ = LLA(0°,0°,700km),
+		NegativeX = LLA(0°,1°,600km),
+		NegativeY = LLA(-1°,0°,600km),
+	)
+	face = test_face
+	ref_uv = get_pointing(sv, getproperty(directions,face); face = face)
+end
+  ╠═╡ =#
+
+# ╔═╡ c5f00eef-2d78-463d-adc1-e95af5ef506b
+#=╠═╡
+let
+	sv = SatView_Old(LLA(0,0,600km),em)
+	lla = LLA(1°,1°,0)
+	sv = @benchmark get_pointing($sv,$lla,:thetaphi)
+end
+  ╠═╡ =#
+
+# ╔═╡ 8b4f42fc-ad87-4ca3-b298-c742ebbe4e72
+#=╠═╡
+let
+	sv = SatView_Old(LLA(0,0,600km),em)
+	lla = map(rand(1000), rand(1000)) do lat,lon
+		LLA(lat*°,lon*°,0km)
+	end
+	ecef = map(lla) do lla
+		ECEFfromLLA(sv.ellipsoid)(lla)
+	end
+	map(x -> get_pointing(sv,x,:thetaphi), ecef)
+end
+  ╠═╡ =#
+
+# ╔═╡ 46eb3a4d-c80b-41a0-9333-aaf6411a010c
+#=╠═╡
+let
+	sv = SatView(LLA(0,0,600km),em)
+	lla = map(rand(1000), rand(1000)) do lat,lon
+		LLA(lat*°,lon*°,0km)
+	end
+	ecef = map(lla) do lla
+		ECEFfromLLA(sv.ellipsoid)(lla)
+	end
+	faces = rand([:PositiveZ, :PositiveY, :NegativeX], 1000)
+	map((x,y) -> get_pointing(sv,x; pointing_type= :thetaphi, face = y), ecef, faces)
+end
+  ╠═╡ =#
+
+# ╔═╡ 7a33f472-346b-4d3a-89f4-53e929351ebf
+#=╠═╡
+let
+	sv = SatView_Old(LLA(0,0,600km),em)
+	lla = map(rand(1000), rand(1000)) do lat,lon
+		LLA(lat*°,lon*°,0km)
+	end
+	ecef = map(lla) do lla
+		ECEFfromLLA(sv.ellipsoid)(lla)
+	end
+	@benchmark map(x -> get_pointing($sv,x,:thetaphi), $ecef)
+end
+  ╠═╡ =#
+
+# ╔═╡ e1b9a305-4d91-4891-97a4-2b6bea555675
+#=╠═╡
+let
+	sv = SatView(LLA(0,0,600km),em)
+	lla = map(rand(1000), rand(1000)) do lat,lon
+		LLA(lat*°,lon*°,0km)
+	end
+	ecef = map(lla) do lla
+		ECEFfromLLA(sv.ellipsoid)(lla)
+	end
+	# faces = rand(instances(Faces), 1000)
+	# faces = rand(Symbol.(instances(Faces)), 1000)
+	faces = rand([-1,-2,-3,1,2,3], 1000)
+	faces = rand([:PositiveZ, :PositiveY, :NegativeX], 1000)
+	@benchmark map((x,y) -> get_pointing($sv,x; pointing_type = :thetaphi, face=y), $ecef, $faces)
+end
+  ╠═╡ =#
+
+# ╔═╡ c365152a-31dd-4de8-8994-fdce2f455ff0
+#=╠═╡
+let
+	sv = SatView(LLA(0,0,600km),em)
+	lla = map(rand(1000), rand(1000)) do lat,lon
+		LLA(lat*°,lon*°,0km)
+	end
+	ecef = map(lla) do lla
+		ECEFfromLLA(sv.ellipsoid)(lla)
+	end
+	# faces = rand(instances(Faces), 1000)
+	# faces = rand(Symbol.(instances(Faces)), 1000)
+	faces = rand([-1,-2,-3,1,2,3], 1000)
+	faces = rand([:PositiveZ], 1000)
+	_rot = map(faces) do face
+		inv(sv.R * face_rotation(face)) 
+	end
+	@benchmark map((x,y) -> get_pointing($sv,x,:thetaphi; R=y), $ecef, $_rot)
+end
+  ╠═╡ =#
 
 # ╔═╡ 1f27b72f-9a3b-4732-a98e-d216af067072
 # ╠═╡ skip_as_script = true
@@ -384,16 +890,119 @@ The optional argument `kind` is used to select whether the pointing is expressed
 
 See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`change_position!`](@ref), [`get_distance_on_earth`](@ref).
 """
-function get_ecef(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
+function get_ecef(sv::SatView_Old,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
 	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
 		UVfromThetaPhi()(pointing)
 	else
 		pointing
 	end
-	ecef = ECEFfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv,h)
+	ecef = ECEFfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv;h)
 end
 
+# ╔═╡ 12330b6f-97b0-4efb-9885-49758bc2f127
+begin
+function get_ecef(rv::ReferenceView, pointing::Point2D, eo::ExtraOutput; pointing_type::Symbol=:uv, h = 0.0, face = rv.face, R = nothing)
+	_R = isnothing(R) ? inv(rv.R * face_rotation(face)) : R 
+	uv = if pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+		UVfromThetaPhi()(pointing)
+	else
+		pointing
+	end
+	ecef, r = ECEFfromUV(rv.ecef,_R',rv.ellipsoid)(uv, eo;h)
+	xyz = XYZfromUV()(uv, r)
+	return ecef, xyz
+end
+get_ecef(rv::ReferenceView, pointing::Point2D;kwargs...) = get_ecef(rv, pointing, ExtraOutput(); kwargs...)[1]
+end
+
+# ╔═╡ cc1c1137-a253-49de-8293-5819236a00cf
+# ╠═╡ skip_as_script = true
+#=╠═╡
+md"""
+## Get LLA
+"""
+  ╠═╡ =#
+
+# ╔═╡ 1f7bf45c-b33b-4bfe-b82d-05b908ce375e
+"""
+	get_lla(sv::SatView,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
+Computes the LLA coordinates of a point on earth seen from the satellite identified by `sv`, the angular pointing identified by `pointing` and located at an altitude `h` [m] above the reference Earth ellipsoid of `sv`.
+
+The optional argument `kind` is used to select whether the pointing is expressed in ThetaPhi (`kind ∈ (:ThetaPhi, :thetaphi, :θφ)`) [rad] or UV coordinates.
+
+See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+"""
+function get_lla(sv::SatView_Old,pointing::Point2D,kind::Symbol=:uv; h = 0.0)
+	uv = if kind ∈ (:ThetaPhi, :thetaphi, :θφ)
+		UVfromThetaPhi()(pointing)
+	else
+		pointing
+	end
+	lla = LLAfromUV(sv.ecef,sv.R,sv.ellipsoid)(uv; h)
+end
+
+# ╔═╡ 99fa5fab-70d0-4b85-9a0c-ecbac0441399
+begin
+function get_lla(rv::ReferenceView,pointing::Point2D, eo::ExtraOutput;kwargs...)
+	ecef, xyz = get_ecef(rv, pointing, eo; kwargs...)
+	return LLAfromECEF(rv.ellipsoid)(ecef), xyz
+end
+
+# Single Output
+get_lla(rv::ReferenceView,pointing::Point2D;kwargs...) = get_lla(rv::ReferenceView,pointing::Point2D, ExtraOutput(); kwargs...)[1]
+end
+
+# ╔═╡ d30176d8-4faf-4ea4-bf11-326b42d15eac
+#=╠═╡
+let
+	sat_lla = LLA(0°,0°,600km)
+	sv = SatView(sat_lla, em)
+	uv = (0,1)
+	face = :NegativeY
+	ref_uv = get_lla(sv, uv; face = face)
+end
+  ╠═╡ =#
+
+# ╔═╡ 8ef02fae-4a93-45de-9040-e045b2e4f59f
+#=╠═╡
+let
+	sat_lla = LLA(0°,0°,600km)
+	sv = SatView(sat_lla, em)
+	face = :NegativeY
+	ref_uv = get_pointing(sv, LLA(0,0,0); face = face)
+end
+  ╠═╡ =#
+
+# ╔═╡ 2f030209-7388-4d42-aaf4-5436b5ca5bfb
+#=╠═╡
+let
+	sat_lla = LLA(0°,0°,600km)
+	sv = SatView(sat_lla, em)
+	uv = (0,0)
+	face = :NegativeY
+	ref_uv = get_lla(sv, uv; h = 700e3, face = face)
+end
+  ╠═╡ =#
+
 # ╔═╡ fb1026c2-4314-44fc-958e-850dbcca2470
+#=╠═╡
+let    
+	sp_ell = SphericalEllipsoid()
+    lla2ecef = ECEFfromLLA(sp_ell)
+
+    em = EarthModel(sp_ell)
+    sat_lla = LLA(0,0,700km)
+
+    sv = SatView_Old(sat_lla, em)
+	lla_ref = LLA(1°, 1°, 1km)
+	ecef_ref = lla2ecef(lla_ref)
+	ref_uv = get_pointing(sv, lla_ref)
+	@test get_lla(sv, ref_uv; h = lla_ref.alt) ≈ lla_ref
+	@test get_ecef(sv, ref_uv; h = lla_ref.alt) ≈ ecef_ref
+end
+  ╠═╡ =#
+
+# ╔═╡ 3f030ab2-d9cb-40de-8017-bfe734634551
 #=╠═╡
 let    
 	sp_ell = SphericalEllipsoid()
@@ -411,6 +1020,36 @@ let
 end
   ╠═╡ =#
 
+# ╔═╡ a7e6d499-bead-4c3f-b38c-05a1f4f1e27f
+#=╠═╡
+let    
+	sp_ell = SphericalEllipsoid()
+    lla2ecef = ECEFfromLLA(sp_ell)
+
+    em = EarthModel(sp_ell)
+    sat_lla = LLA(0,0,700km)
+
+    sv = SatView_Old(sat_lla, em)
+	uv = (0.1,0)
+	@benchmark get_lla($sv, $uv; h = 100e3)
+end
+  ╠═╡ =#
+
+# ╔═╡ 4fafa550-580b-4851-855d-0e46bf14a357
+#=╠═╡
+let    
+	sp_ell = SphericalEllipsoid()
+    lla2ecef = ECEFfromLLA(sp_ell)
+
+    em = EarthModel(sp_ell)
+    sat_lla = LLA(0,0,700km)
+
+    rv = SatView(sat_lla, em)
+	uv = (0.1,0)
+	@benchmark get_lla($rv, $uv; h = 100e3)
+end
+  ╠═╡ =#
+
 # ╔═╡ 8bc60d8d-7b54-4dce-a3e4-e336c0b16d4e
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -420,12 +1059,12 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ b2cb0afd-1220-40bd-8e1b-6df35e3db2f1
-function get_era(sv::SatView, lla::LLA)
+function get_era(sv, lla::LLA)
 	ERAfromECEF(lla;ellipsoid = sv.ellipsoid)(sv.ecef)
 end
 
 # ╔═╡ 8fccb117-2048-4607-8db1-f8df7f5ef156
-function get_era(sv::SatView, ecef::StaticVector{3})
+function get_era(sv, ecef::StaticVector{3})
 	ERAfromECEF(ecef;ellipsoid = sv.ellipsoid)(sv.ecef)
 end
 
@@ -433,14 +1072,14 @@ end
 # ╠═╡ skip_as_script = true
 #=╠═╡
 # We test that a non-visible point is nan
-@test get_era(SatView(LLA(0,0,700km),em),LLA(40°,-39°,0)) |> isnan
+@test get_era(SatView_Old(LLA(0,0,700km),em),LLA(40°,-39°,0)) |> isnan
   ╠═╡ =#
 
 # ╔═╡ 2ad13505-0c60-4ccb-b536-e865c24a0396
 # ╠═╡ skip_as_script = true
 #=╠═╡
 # We test that a visible point is not nan
-@test get_era(SatView(LLA(0,0,600km),em),LLA(0,0,500km)) ≈ ERA(90°, 100km, 0°)
+@test get_era(SatView_Old(LLA(0,0,600km),em),LLA(0,0,500km)) ≈ ERA(90°, 100km, 0°)
   ╠═╡ =#
 
 # ╔═╡ 97c3ab73-5d2b-4871-aaa2-f8d7f1a7204d
@@ -450,6 +1089,8 @@ end
   ╠═╡ =#
 
 # ╔═╡ 80b5256d-e3f1-4329-be97-34e557377466
+# ╠═╡ skip_as_script = true
+#=╠═╡
 function meshgrid(xin,yin)
 	nx=length(xin)
 	ny=length(yin)
@@ -463,12 +1104,15 @@ function meshgrid(xin,yin)
 	end
 	return xout,yout
 end;
+  ╠═╡ =#
 
 # ╔═╡ bbf6f990-40b3-471f-a46c-61f5fd6f5824
+# ╠═╡ skip_as_script = true
+#=╠═╡
 # Visual Test ERA
 begin
 	earthmodel = EarthModel()
-	svTest = SatView(LLA(0,0,700km),earthmodel)
+	svTest = SatView_Old(LLA(0,0,700km),earthmodel)
 	gridRes = 0.5
 	x_plot = -180:gridRes:180
 	y_plot = -90:gridRes:90
@@ -486,9 +1130,9 @@ begin
 		end
 	end
 end
+  ╠═╡ =#
 
 # ╔═╡ 74b99a07-9e73-4532-a50d-10221c47f324
-# ╠═╡ skip_as_script = true
 #=╠═╡
 let
 	el_plot = heatmap(
@@ -501,11 +1145,10 @@ let
 					yaxis_title = "LAT",
 					xaxis_title = "LON",
 					title = "Elevation Test"))
-end
+end;
   ╠═╡ =#
 
 # ╔═╡ 1c0aa81c-efa2-4ba4-a3b2-70276d76c4f1
-# ╠═╡ skip_as_script = true
 #=╠═╡
 let
 	az_plot = heatmap(
@@ -518,11 +1161,10 @@ let
 					yaxis_title = "LAT",
 					xaxis_title = "LON",
 					title = "Azimuth Test"))
-end
+end;
   ╠═╡ =#
 
 # ╔═╡ 5023b71d-219e-4f2f-b319-e9899e9702ac
-# ╠═╡ skip_as_script = true
 #=╠═╡
 let
 	r_plot = heatmap(
@@ -535,7 +1177,7 @@ let
 					yaxis_title = "LAT",
 					xaxis_title = "LON",
 					title = "Range Test"))
-end
+end;
   ╠═╡ =#
 
 # ╔═╡ 64370881-a469-4748-97c5-ec27199d529b
@@ -547,7 +1189,7 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ 2efb01b8-16b1-4186-94f4-cdfbca1310de
-geod_inverse(sv::SatView, args...) = geod_inverse(sv.geod,args...)
+geod_inverse(sv::SatView_Old, args...) = geod_inverse(sv.geod,args...)
 
 # ╔═╡ e0915eab-a53d-4fb2-9029-83793073ac3c
 """
@@ -565,20 +1207,20 @@ If an instance of `ExtraOutput` is provided as 4th argument, the function also r
 
 See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
 """
-function get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, eo::ExtraOutput, kind::Symbol=:uv)
-	lla1 = get_lla(sv, p1, kind)
-	lla2 = get_lla(sv, p2, kind)
+function get_distance_on_earth(sv, p1::Point2D, p2::Point2D, eo::ExtraOutput; pointing_type::Symbol=:uv)
+	lla1 = get_lla(sv, p1; pointing_type)
+	lla2 = get_lla(sv, p2; pointing_type)
 	get_distance_on_earth(sv, lla1, lla2, eo)
 end
 
 # ╔═╡ 30d32b7a-c95c-4d80-a60a-a87b27b3bf3c
-get_distance_on_earth(sv::SatView, p1::Point2D, p2::Point2D, kind::Symbol=:uv) = get_distance_on_earth(sv, p1, p2, ExtraOutput(), kind)[1]
+get_distance_on_earth(sv, p1::Point2D, p2::Point2D; kwargs...) = get_distance_on_earth(sv, p1, p2, ExtraOutput(); kwargs...)[1]
 
 # ╔═╡ 407101b2-c794-49b0-9f8b-07fb45b80ca9
-get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA, ::ExtraOutput) = geod_inverse(sv.geod, lla1, lla2)
+get_distance_on_earth(sv, lla1::LLA, lla2::LLA, ::ExtraOutput) = geod_inverse(sv.geod, lla1, lla2)
 
 # ╔═╡ af71267d-b5ee-46b7-bf8d-d740033d35e0
-get_distance_on_earth(sv::SatView, lla1::LLA, lla2::LLA) = get_distance_on_earth(sv, lla1, lla2, ExtraOutput())[1]
+get_distance_on_earth(sv, lla1::LLA, lla2::LLA) = get_distance_on_earth(sv, lla1, lla2, ExtraOutput())[1]
 
 # ╔═╡ 2612961b-0e1e-4615-8959-74ab3bc919f9
 # ╠═╡ skip_as_script = true
@@ -605,12 +1247,12 @@ function get_nadir_beam_diameter(sv, scan_3db)
 end
 
 # ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
-export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter
+export ReferenceView, SatView, UserView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter
 
 # ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
 # ╠═╡ skip_as_script = true
 #=╠═╡
-get_nadir_beam_diameter(SatView(LLA(50°,0°,735km), EarthModel()), 55)
+get_nadir_beam_diameter(SatView_Old(LLA(50°,0°,735km), EarthModel()), 55)
   ╠═╡ =#
 
 # ╔═╡ c02d0705-6647-4a44-8ae8-fc256f18c4ce
@@ -619,6 +1261,127 @@ get_nadir_beam_diameter(SatView(LLA(50°,0°,735km), EarthModel()), 55)
 md"""
 # Tests
 """
+  ╠═╡ =#
+
+# ╔═╡ cfee12f0-58cc-402c-b308-092dab44312b
+md"""
+## Performance Check
+"""
+
+# ╔═╡ 175798a4-a95b-4808-a32f-27cbd4f3e12f
+#=╠═╡
+begin
+	sv_old = SatView_Old(LLA(0,0,600km), em)
+	sv_new = SatView(LLA(0,0,600km), em)
+	l2e = ECEFfromLLA(em.ellipsoid)
+end
+  ╠═╡ =#
+
+# ╔═╡ bd62bdd6-4de4-449c-b5f1-fb1b4f695cda
+#=╠═╡
+let
+	lla_ref = LLA(0,0,10km)
+	@benchmark get_range($sv_new, $lla_ref)
+end
+  ╠═╡ =#
+
+# ╔═╡ db7c40f5-4865-4eea-830b-7719982be38d
+md"""
+### Get Range
+"""
+
+# ╔═╡ 070d3781-2ed7-4d89-9964-1005bfb3c1bb
+#=╠═╡
+let
+	lla_ref = LLA(0,0,10km)
+	old_bench = @benchmark Ref(get_range($sv_old, $lla_ref))[]
+	new_bench = @benchmark Ref(get_range($sv_new, $lla_ref))[]
+	tr = @test get_range(sv_old, lla_ref) ≈ get_range(sv_new, lla_ref)
+	tr, old_bench, new_bench
+end
+  ╠═╡ =#
+
+# ╔═╡ 781ee9eb-7ee5-49c5-ac2d-1b163e894a88
+#=╠═╡
+let
+	uv_ref = (0.1,0.2)
+	old_bench = @benchmark Ref(get_range($sv_old, $uv_ref))[]
+	new_bench = @benchmark Ref(get_range($sv_new, $uv_ref))[]
+	tr = @test get_range(sv_old, uv_ref) ≈ get_range(sv_new, uv_ref)
+	tr, old_bench, new_bench
+end
+  ╠═╡ =#
+
+# ╔═╡ c8fa4280-96fd-4d59-87c7-84f93cc3712d
+md"""
+### Get Pointing
+"""
+
+# ╔═╡ 80c75770-962b-4d9c-83b9-c52cb0c56e50
+#=╠═╡
+let
+	lla_ref = LLA(1°,0.5°,10km)
+	old_bench = @benchmark Ref(get_pointing($sv_old, $lla_ref, :thetaphi))[]
+	new_bench = @benchmark Ref(get_pointing($sv_new, $lla_ref; pointing_type = :thetaphi))[]
+	tr = @test get_pointing(sv_new, lla_ref; pointing_type = :thetaphi) ≈ get_pointing(sv_old, lla_ref, :thetaphi)
+	tr, old_bench, new_bench
+end	
+  ╠═╡ =#
+
+# ╔═╡ 3874716c-36ab-4bb5-885b-6cfefab4f0a8
+#=╠═╡
+let
+	lla_ref = LLA(1°,0.5°,10km)
+	ecef_ref = l2e(lla_ref)
+	old_bench = @benchmark Ref(get_pointing($sv_old, $ecef_ref, :thetaphi))[]
+	new_bench = @benchmark Ref(get_pointing($sv_new, $ecef_ref; pointing_type = :thetaphi))[]
+	tr = @test get_pointing(sv_new, ecef_ref; pointing_type = :thetaphi) ≈ get_pointing(sv_old, ecef_ref, :thetaphi)
+	tr, old_bench, new_bench
+end	
+  ╠═╡ =#
+
+# ╔═╡ fa655044-5c0b-4c76-b2ac-dd32038d13a9
+md"""
+### Get ECEF
+"""
+
+# ╔═╡ 004333de-5df1-4b36-b451-5e6c6f0a0251
+#=╠═╡
+let
+	uv_ref = SA_F64[.1,.05]
+	old_bench = @benchmark Ref(get_ecef($sv_old, $uv_ref))[]
+	new_bench = @benchmark Ref(get_ecef($sv_new, $uv_ref))[]
+	tr = @test get_ecef(sv_new, uv_ref) ≈ get_ecef(sv_old, uv_ref)
+	tr, old_bench, new_bench
+end	
+  ╠═╡ =#
+
+# ╔═╡ be0014d3-397a-48a8-b7dd-fd896375a457
+#=╠═╡
+let
+	uv_ref = SA_F64[.1,.05]
+	R = inv(sv_new.R * face_rotation(3))
+	old_bench = @benchmark Ref(get_ecef($sv_old, $uv_ref))[]
+	new_bench = @benchmark Ref(get_ecef($sv_new, $uv_ref; R = $R))[]
+	tr = @test get_ecef(sv_new, uv_ref; R) ≈ get_ecef(sv_old, uv_ref)
+	tr, old_bench, new_bench
+end	
+  ╠═╡ =#
+
+# ╔═╡ 49f1a356-b92e-4ecb-99c2-f1b4e6c0a014
+md"""
+### Get LLA
+"""
+
+# ╔═╡ 6d7b13a3-6d8b-409e-b55a-ca81819ec9d6
+#=╠═╡
+let
+	uv_ref = SA_F64[.1,.05]
+	old_bench = @benchmark Ref(get_lla($sv_old, $uv_ref))[]
+	new_bench = @benchmark Ref(get_lla($sv_new, $uv_ref))[]
+	tr = @test get_lla(sv_new, uv_ref) ≈ get_lla(sv_old, uv_ref)
+	tr, old_bench, new_bench
+end
   ╠═╡ =#
 
 # ╔═╡ d15726ab-5a28-4a24-b5ed-b3c8ecb6c581
@@ -653,6 +1416,7 @@ PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
 PlutoExtras = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
 PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
 PlutoTest = "cb4044da-4d16-4ffa-a6a3-8cad7f73ebdc"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Proj4 = "9a7e659c-8ee8-5706-894e-f68f43bc57ea"
 Rotations = "6038ab10-8711-5258-84ad-4b1120ba62dc"
 SatelliteToolbox = "6ac157d9-b43d-51bb-8fab-48bf53814f4a"
@@ -668,6 +1432,7 @@ PlutoDevMacros = "~0.4.5"
 PlutoExtras = "~0.6.0"
 PlutoPlotly = "~0.3.6"
 PlutoTest = "~0.2.2"
+PlutoUI = "~0.7.50"
 Proj4 = "~0.7.6"
 Rotations = "~1.2.0"
 SatelliteToolbox = "~0.9.4"
@@ -681,7 +1446,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0-rc2"
 manifest_format = "2.0"
-project_hash = "edbaf21b001d00e6e5e20eb810f9b65ab5c9588b"
+project_hash = "1961fc31e271814aebe300c96b08db48f96b94c1"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1107,9 +1872,9 @@ version = "0.2.2"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "eadad7b14cf046de6eb41f13c9275e5aa2711ab6"
+git-tree-sha1 = "5bb5129fdd62a2bbbe17c2756932259acf467386"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.49"
+version = "0.7.50"
 
 [[deps.PolynomialRoots]]
 git-tree-sha1 = "5f807b5345093487f733e520a1b7395ee9324825"
@@ -1356,33 +2121,85 @@ version = "17.4.0+0"
 # ╠═e469d967-79e4-4ef2-b635-51a183cb12e7
 # ╠═4794b9dc-4297-402b-94a2-ed686584bb09
 # ╠═dd8d119d-550c-4217-923d-43aaf2b8327b
+# ╟─9e65ad17-95bd-46fa-bc18-9d5e8c501d9a
+# ╠═f1d1295e-7fa1-44d0-bdac-8b7830da8a61
+# ╠═e1a755fc-8164-4a94-8bff-494f8d95d2f2
+# ╠═9e8f0786-1daa-4b9e-9172-fc0767582c7e
+# ╠═93222642-f2a6-4de7-8c92-21c96ef009a4
+# ╠═cb0b070b-f70a-458e-bf72-0a4d2e93ec41
+# ╠═28c868ca-9954-47ff-8949-a41fb7fc6d41
+# ╠═4217aa7d-f404-44e9-9d6a-4becb94b97e3
+# ╠═5dc71a85-a20d-4448-98b4-5065a249df1d
+# ╠═06fd50d4-c6fe-449d-8a64-878cf4756345
+# ╠═67dad6aa-c91b-4aeb-ba52-dec60b093555
+# ╠═c6ee08ba-3546-48ea-9801-edc00dfd25f0
+# ╠═a34ca715-e7f2-4fa7-ba94-8ad3f9b1f4cd
+# ╠═227c0f3e-6e45-48ac-92d4-d1c1c730e4e0
+# ╠═d02cf439-9be3-4b78-97cf-58b200220ffe
+# ╠═c89bf8d0-366c-4598-9b1f-882fb6c629bc
+# ╠═371df82a-bb34-48ec-9063-a0af88c630d3
 # ╠═6eb9424e-3dd2-46d4-b4d2-81596bb81668
 # ╠═170f2914-fdf9-46c8-a8e0-9130b046bd60
-# ╠═e28cbfc7-408e-49b5-9aeb-bd01c32fba46
 # ╠═5f1fd82d-f441-4a1b-9840-773a8635d3db
-# ╠═091e4ec2-ea9e-411e-8f39-73aeb73c0214
+# ╟─091e4ec2-ea9e-411e-8f39-73aeb73c0214
 # ╠═41370c82-d32a-41ea-a21a-614574292c21
+# ╠═3c2781b8-e8df-446f-95ed-597112edabec
+# ╠═b17a4660-3938-4816-8182-6feae471b50d
+# ╠═cddcb68d-5400-4cb9-90ef-b3e149900f8a
+# ╠═12f31d2c-1eac-47bc-bda2-a32395ff8265
+# ╠═64919bbb-3b52-48e1-a7ea-c0916c47994d
+# ╟─5c1d0beb-c00c-40a8-b255-c887be99e706
+# ╠═f127481d-c60e-43d0-ab9f-4d4f35984015
+# ╠═3a745709-8f5b-4f22-848a-2f9754ab27d8
 # ╠═f77dcbcd-f042-4f7c-b97f-de63637229d0
 # ╠═78a8e7a4-333d-44ca-a438-fd85d7078300
 # ╠═709c44c8-c580-4cf7-8376-9c513eb3bd53
+# ╠═b996bcea-b4f4-47fa-aa8b-39cebcf1600e
+# ╠═b4746c71-ba12-4729-89a9-e337d6c8708f
 # ╠═84769564-8ba8-46f5-b494-b0689d9abd65
 # ╠═642f2ede-b154-4260-a959-0a47ca4793b7
 # ╠═7a75d351-8583-455f-89c4-2d50cf79ea96
 # ╠═556934d8-d3ee-4a43-8f74-0939c5431c6f
 # ╠═68417643-fa77-4780-9890-b0dac95bdb7f
 # ╠═da78f52b-30b6-4faf-bcea-b665c10ff4fe
+# ╟─f8c4783d-7e4b-478c-8c62-584e4c54ffaa
+# ╠═0cde0a71-7f27-4290-88cd-2cccf627926b
+# ╠═8838e53a-163d-4390-87d5-437bb1e3916c
+# ╠═20f6c0c4-8b86-468b-bcc4-da58ff7bb387
+# ╠═3d7f28b7-62ca-4b0c-8af3-ae081d27adb7
+# ╠═bd62bdd6-4de4-449c-b5f1-fb1b4f695cda
+# ╠═fd3a1dcb-2e64-47f8-a932-452742090ac1
+# ╠═3381783a-b6d7-43c7-947d-c1de4437e25b
 # ╠═449b49de-2951-41fc-ba46-89eaa6c52e79
 # ╠═e7443f5b-a1a8-4866-9a64-ce7587465911
-# ╠═7c07a3c1-c1ec-4b83-b7c6-251edf91273c
+# ╠═f99b984a-b7cf-4318-8f74-aacb644bc146
+# ╠═b389a1db-c444-481c-b168-3069c7367276
 # ╟─39a1850b-f64a-4157-8f07-d7a78918fea1
 # ╠═51987c04-18f5-46bb-a3ba-5f94907a7960
 # ╠═a6db34bc-b846-49aa-8d57-fb32cdce1684
-# ╠═1758748c-fa4b-4414-a05d-a32970c7a94b
-# ╠═cc1c1137-a253-49de-8293-5819236a00cf
-# ╠═1f7bf45c-b33b-4bfe-b82d-05b908ce375e
-# ╠═fb1026c2-4314-44fc-958e-850dbcca2470
+# ╠═83634223-87d0-4c31-801a-af8a7f9f678a
+# ╠═41430ac6-7925-45f0-b3c0-2409744af11c
+# ╠═951fc2e2-ada9-4aad-876a-4cbd46200f6c
+# ╠═a93e2354-34d1-4d1d-ac3c-f4c99099820a
+# ╠═c5f00eef-2d78-463d-adc1-e95af5ef506b
+# ╠═8b4f42fc-ad87-4ca3-b298-c742ebbe4e72
+# ╠═46eb3a4d-c80b-41a0-9333-aaf6411a010c
+# ╠═7a33f472-346b-4d3a-89f4-53e929351ebf
+# ╠═e1b9a305-4d91-4891-97a4-2b6bea555675
+# ╠═c365152a-31dd-4de8-8994-fdce2f455ff0
 # ╠═1f27b72f-9a3b-4732-a98e-d216af067072
 # ╠═948cc7a1-d85e-4cfe-b2e4-e047bcbac305
+# ╠═12330b6f-97b0-4efb-9885-49758bc2f127
+# ╠═cc1c1137-a253-49de-8293-5819236a00cf
+# ╠═1f7bf45c-b33b-4bfe-b82d-05b908ce375e
+# ╠═99fa5fab-70d0-4b85-9a0c-ecbac0441399
+# ╠═d30176d8-4faf-4ea4-bf11-326b42d15eac
+# ╠═8ef02fae-4a93-45de-9040-e045b2e4f59f
+# ╠═2f030209-7388-4d42-aaf4-5436b5ca5bfb
+# ╠═fb1026c2-4314-44fc-958e-850dbcca2470
+# ╠═3f030ab2-d9cb-40de-8017-bfe734634551
+# ╠═a7e6d499-bead-4c3f-b38c-05a1f4f1e27f
+# ╠═4fafa550-580b-4851-855d-0e46bf14a357
 # ╠═8bc60d8d-7b54-4dce-a3e4-e336c0b16d4e
 # ╠═b2cb0afd-1220-40bd-8e1b-6df35e3db2f1
 # ╠═8fccb117-2048-4607-8db1-f8df7f5ef156
@@ -1403,7 +2220,20 @@ version = "17.4.0+0"
 # ╠═2612961b-0e1e-4615-8959-74ab3bc919f9
 # ╠═30959832-9eb2-48c5-83d5-776d336c9aa7
 # ╠═4af7a092-8f42-4aef-9c09-feab8ebc1d87
-# ╠═c02d0705-6647-4a44-8ae8-fc256f18c4ce
+# ╟─c02d0705-6647-4a44-8ae8-fc256f18c4ce
+# ╟─cfee12f0-58cc-402c-b308-092dab44312b
+# ╠═175798a4-a95b-4808-a32f-27cbd4f3e12f
+# ╟─db7c40f5-4865-4eea-830b-7719982be38d
+# ╠═070d3781-2ed7-4d89-9964-1005bfb3c1bb
+# ╠═781ee9eb-7ee5-49c5-ac2d-1b163e894a88
+# ╟─c8fa4280-96fd-4d59-87c7-84f93cc3712d
+# ╠═80c75770-962b-4d9c-83b9-c52cb0c56e50
+# ╠═3874716c-36ab-4bb5-885b-6cfefab4f0a8
+# ╟─fa655044-5c0b-4c76-b2ac-dd32038d13a9
+# ╠═004333de-5df1-4b36-b451-5e6c6f0a0251
+# ╠═be0014d3-397a-48a8-b7dd-fd896375a457
+# ╟─49f1a356-b92e-4ecb-99c2-f1b4e6c0a014
+# ╠═6d7b13a3-6d8b-409e-b55a-ca81819ec9d6
 # ╠═d15726ab-5a28-4a24-b5ed-b3c8ecb6c581
 # ╠═ae686da9-45d5-4fc2-9cbd-2d828d792407
 # ╠═71d3f92e-d143-40dc-8701-37f9053766ef
