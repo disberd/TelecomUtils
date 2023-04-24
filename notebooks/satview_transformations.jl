@@ -560,7 +560,8 @@ function _intersection_solutions(pointing_ecef,sat_ecef,a,b)
 	# Compute the two possible values of t
 	t₁ = (-β - √Δ)/2α	
 	t₂ = (-β + √Δ)/2α
-	
+
+	# t₁ < t₂ is always true
 	return t₁,t₂
 end
 
@@ -593,21 +594,58 @@ compute_sat_position(LLA(0°,0°,0), 90°, 0°; h = 7e6)
   ╠═╡ =#
 
 # ╔═╡ 4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
-# Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth 
-function earth_intersection(pointing_ecef,sat_ecef,a,b)
+# Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth. The optional kwarg h can be provided to find the intersection at an altitude h above the ellipsoid
+function earth_intersection(pointing_ecef,sat_ecef,a,b; h = 0.0)
 	
-	t₁,t₂ = _intersection_solutions(pointing_ecef,sat_ecef,a,b)
+	t₁,t₂ = _intersection_solutions(pointing_ecef,sat_ecef,a + h,b + h)
+
+	# By definition we have t₂ > t₁ so we can already find the lower positive value of the two
+	t = t₁ > 0 ? t₁ : t₂
 	
-	# If no solution exists, t₁ is NaN, so we return a 3d NaN vector
-	if isnan(t₁) || t₁ <= 0 || t₂ <= 0 
+	# If no solution exists, t₁ is NaN while if both solution are negative we
+	# assume there is no solution as both intersection are not in direction of
+	# the provided pointing. In both cases we return a 3d NaN vector
+	if isnan(t) || t < 0 
 		return SA_F64[NaN,NaN,NaN]
 	end
+
+	# When we reach this point, if a non-zero h was provided, and a solution was found, we also have to make sure that the solution at higher altitude is not actually blocked by the original ellipsoid (earth)
+	if h ≠ 0
+		t̃₁, t̃₂ =  _intersection_solutions(pointing_ecef,sat_ecef,a,b)
+		t̃ = t̃₁ > 0 ? t̃₁ : t̃₂
 	
-	t = t₁ < t₂ ? t₁ : t₂
+		# If we found two positive solution and the smaller is lower than t, it means that the earth is actually blocking the view to the candidate point, so again we return NaN
+		!isnan(t̃) && t̃ > 0 && t̃ < t && t̃₁ ≠ t̃₂ && return SA_F64[NaN,NaN,NaN]
+	end
 	
 	# Compute the ecef coordinates of the intersectinon on earth
 	ecef = sat_ecef + t*pointing_ecef
 end
+
+# ╔═╡ ea3e2a47-de2f-4383-8f01-e8fbebbdd605
+#=╠═╡
+let
+	sat_ecef = SA_F64[1e7, 0, 0]
+	pointing_ecef = SA_F64[-1, 0, 0]
+	sp = SphericalEllipsoid()
+	@benchmark earth_intersection($pointing_ecef, $sat_ecef, $(sp.a), $(sp.b))
+end	
+  ╠═╡ =#
+
+# ╔═╡ d788faa8-df04-4a14-bef0-d76f85a9175e
+#=╠═╡
+let
+	sat_ecef = SA_F64[1e7, 0, 0]
+	pointing_ecef = SA_F64[-1, 0, 0]
+	sp = SphericalEllipsoid()
+	@benchmark earth_intersection($pointing_ecef, $sat_ecef, $(sp.a), $(sp.b); h = 100)
+end	
+  ╠═╡ =#
+
+# ╔═╡ 5cea5fed-1cee-41f3-bcdf-2d81e96c72d4
+#=╠═╡
+@benchmark _intersection_solutions(SA_F64[100,0,0], SA_F64[-1,0,0], 10,10)
+  ╠═╡ =#
 
 # ╔═╡ 7ab00d88-9f0c-4ad9-a735-6ef845055823
 # ╠═╡ skip_as_script = true
@@ -665,7 +703,7 @@ begin
 		n̂ = trans.R * p̂
 		sat_ecef = trans.origin
 		a,b = trans.ellipsoid.a, trans.ellipsoid.b
-		ecef = earth_intersection(n̂,sat_ecef,a+h,b+h)
+		ecef = earth_intersection(n̂,sat_ecef,a,b;h)
 	end
 	# Tuple overload
 	(trans::ECEFfromUV)(tup::Tuple{<:Number, <:Number}, h=0.0) = trans(SVector(tup), h)
@@ -807,7 +845,28 @@ md"""
 """
 
 # ╔═╡ c9c9402e-c80d-4a31-9a24-f6363be60e7c
+# ╠═╡ skip_as_script = true
+#=╠═╡
+begin
+	sp = SphericalEllipsoid()
+	l2e = ECEFfromLLA(sp)
+end
+  ╠═╡ =#
 
+# ╔═╡ c34baa23-8483-4626-a17f-3d46ca162934
+#=╠═╡
+let
+	# We check the erath intersection at the tangent between satellite and earth ellipsoid
+	sat_lla = LLA(0,0,600km)
+	sat_ecef = l2e(sat_lla)
+	eoe_scan = asin(sp.a / (sp.a + sat_lla.alt))
+	u = sin(eoe_scan)
+	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+	uv2lla((u * (1-1e-8),0))
+	uv2lla((u,0), 100)
+	uv2lla((u * (1-1e-6),0), 100)
+end
+  ╠═╡ =#
 
 # ╔═╡ f836fc27-91aa-49f6-a67c-94f8c1f4a607
 md"""
@@ -825,7 +884,7 @@ let
 		LLA(-1°, 0°, 0km), # Bottom - U 0, V Negative
 	]
 	target_uv = map(target_lla) do lla
-		UVfromLLA(sat_lla; ellipsoid=SphericalEllipsoid())(lla) |> normalize
+		UVfromLLA(sat_lla; ellipsoid=sp)(lla) |> normalize
 	end
 	@test all([
 		target_uv[1] == [-1,0],
@@ -841,7 +900,7 @@ end
 let
 	sat_lla = LLA(0°, 0°, 600km)
 	target_lla = LLA(0°, 0°, 610km)
-	target_uv =	UVfromLLA(sat_lla; ellipsoid=SphericalEllipsoid())(target_lla)
+	target_uv =	UVfromLLA(sat_lla; ellipsoid=sp)(target_lla)
 	@test all(isnan.(target_uv))
 end
   ╠═╡ =#
@@ -849,7 +908,6 @@ end
 # ╔═╡ c4a101fc-b7d2-41cb-9252-9fbad7811957
 #=╠═╡
 let
-	sp = SphericalEllipsoid()
 	lla2ecef = ECEFfromLLA(sp)
 	sat_lla = LLA(0°, 0°, 600km)
 	sat_ecef = lla2ecef(sat_lla)
@@ -857,6 +915,24 @@ let
 	target_lla = LLA(0°, 0°, 610km)
 	target_uv =	UVfromLLA(sat_ecef, R', sp)(target_lla)
 	@test all(map(!isnan,target_uv))
+end
+  ╠═╡ =#
+
+# ╔═╡ 84c178cb-72bb-4aae-8ce0-5284b7b4a58d
+#=╠═╡
+let         
+	# We find the pointing that corresponds to Edge of Earth and check various combination in its vicinity
+	sat_lla = LLA(0,0,600km)
+	sat_ecef = l2e(sat_lla)
+	eoe_scan = asin(sp.a / (sp.a + sat_lla.alt))
+	u = sin(eoe_scan)
+	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+	@test !isnan(uv2lla((u * (1-eps()),0))) # We should find a solution because we are pointing slightly less than EoE
+	@test isnan(uv2lla((u * (1+eps()),0))) # We should not find a solution because we are pointing slightly more than EoE
+	@test !isnan(uv2lla((u * (1-eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
+	@test !isnan(uv2lla((u * (1+eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
+	@test isnan(uv2lla((u * (1-eps()),0), 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
+	@test !isnan(uv2lla((u * (1+eps()),0), 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
 end
   ╠═╡ =#
 
@@ -1570,7 +1646,10 @@ version = "17.4.0+0"
 # ╟─95704330-4d7b-44fd-b8c0-d1570812f619
 # ╠═2e788b78-e5e0-4f60-aa8c-ad4f203c982e
 # ╠═4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
+# ╠═ea3e2a47-de2f-4383-8f01-e8fbebbdd605
+# ╠═d788faa8-df04-4a14-bef0-d76f85a9175e
 # ╠═2af585a1-05d0-4b5a-9ee6-15eabb40a27c
+# ╠═5cea5fed-1cee-41f3-bcdf-2d81e96c72d4
 # ╠═7ab00d88-9f0c-4ad9-a735-6ef845055823
 # ╠═f634d5d0-bb61-4bd6-9b1c-df75399de739
 # ╠═8b3f7041-ce2f-4d64-a135-9403eacd6385
@@ -1588,9 +1667,11 @@ version = "17.4.0+0"
 # ╠═b07c6df9-586e-4a4c-be16-cc4ac7b1f704
 # ╟─4e2b42d8-cd4f-4e29-b519-b7139a83be02
 # ╠═c9c9402e-c80d-4a31-9a24-f6363be60e7c
+# ╠═c34baa23-8483-4626-a17f-3d46ca162934
 # ╟─f836fc27-91aa-49f6-a67c-94f8c1f4a607
 # ╠═7eff4ca6-5e48-49ac-95cc-5256f8f4e0f7
 # ╠═cbafedbf-adea-4249-b681-fc2f4816ebb9
 # ╠═c4a101fc-b7d2-41cb-9252-9fbad7811957
+# ╠═84c178cb-72bb-4aae-8ce0-5284b7b4a58d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

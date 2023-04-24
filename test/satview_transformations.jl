@@ -61,4 +61,21 @@ import TelecomUtils: earth_intersection
         lla2uv = UVfromLLA(lla2uv.origin, RotY(180°) * lla2uv.R, lla2uv.ellipsoid)
         @test all(map(!isnan, lla2uv(target_lla)))
     end
+
+    @testset "LLAfromUV" begin
+        sp = SphericalEllipsoid()
+        l2e = ECEFfromLLA(sp)
+        # We find the pointing that corresponds to Edge of Earth and check various combination in its vicinity
+        sat_lla = LLA(0,0,600km)
+        sat_ecef = l2e(sat_lla)
+        eoe_scan = asin(sp.a / (sp.a + sat_lla.alt))
+        u = sin(eoe_scan)
+        uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+        @test !isnan(uv2lla((u * (1-eps()),0))) # We should find a solution because we are pointing slightly less than EoE
+        @test isnan(uv2lla((u * (1+eps()),0))) # We should not find a solution because we are pointing slightly more than EoE
+        @test !isnan(uv2lla((u * (1-eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
+        @test !isnan(uv2lla((u * (1+eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
+        @test isnan(uv2lla((u * (1-eps()),0), 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
+        @test !isnan(uv2lla((u * (1+eps()),0), 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
+    end
 end
