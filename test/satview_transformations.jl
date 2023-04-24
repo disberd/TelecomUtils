@@ -1,7 +1,8 @@
 import Unitful: °, km
 using Rotations
 import LinearAlgebra: normalize
-import TelecomUtils: earth_intersection
+import TelecomUtils: earth_intersection, ExtraOutput
+using StaticArrays
 
 @testset "Satview Transformations" begin
     sp_ell = SphericalEllipsoid()
@@ -77,5 +78,13 @@ import TelecomUtils: earth_intersection
         @test !isnan(uv2lla((u * (1+eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
         @test isnan(uv2lla((u * (1-eps()),0), h = 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
         @test !isnan(uv2lla((u * (1+eps()),0), h = 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
+
+
+        lla2uv = inv(uv2lla)
+        target_uv = SA_F64[0.1,0.1]
+        target_lla, r = uv2lla(target_uv, ExtraOutput())
+        uv2, r2 = lla2uv(target_lla, ExtraOutput())
+        @test uv2 ≈ target_uv 
+        @test r2 ≈ r
     end
 end

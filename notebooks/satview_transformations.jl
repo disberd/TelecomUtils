@@ -825,7 +825,7 @@ begin
 		uv = SVector(xyz[1],xyz[2]) ./  r
 		
 		# Return both the uv coordinates and the distance to the target point
-		return uv, xyz
+		return uv, r
 	end
 	# Default version without range
 	(trans::UVfromECEF)(ecef::StaticVector{3}) = trans(ecef,ExtraOutput())[1]
@@ -1021,6 +1021,19 @@ let
 	@test !isnan(uv2lla((u * (1+eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
 	@test isnan(uv2lla((u * (1-eps()),0), h = 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
 	@test !isnan(uv2lla((u * (1+eps()),0), h = 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
+end
+  ╠═╡ =#
+
+# ╔═╡ 83a29fe9-ad7a-4e7d-ba05-e6b3ce45c0c3
+#=╠═╡
+let
+	sat_lla = LLA(0,0,600km)
+	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+	lla2uv = inv(uv2lla)
+	target_uv = SA_F64[0.1,0.1]
+	target_lla, r = uv2lla(target_uv, ExtraOutput())
+	uv2, r2 = lla2uv(target_lla, ExtraOutput())
+	@test uv2 ≈ target_uv && r2 ≈ r
 end
   ╠═╡ =#
 
@@ -1767,5 +1780,6 @@ version = "17.4.0+0"
 # ╠═cbafedbf-adea-4249-b681-fc2f4816ebb9
 # ╠═c4a101fc-b7d2-41cb-9252-9fbad7811957
 # ╠═84c178cb-72bb-4aae-8ce0-5284b7b4a58d
+# ╠═83a29fe9-ad7a-4e7d-ba05-e6b3ce45c0c3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
