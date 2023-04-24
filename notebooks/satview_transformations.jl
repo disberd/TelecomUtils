@@ -307,14 +307,14 @@ begin
 	UVfromThetaPhi <: CoordinateTransformations.Transformation
 Convert a 2-D point representing θ,φ pointing angles [in rad] in the uv coordinates. Theta (θ) and Phi (φ) follow the ISO convention for spherical coordinates so represent the polar and azimuth angle respectively.
 	
-See also [`ThetaPhifromUV](@ref)
+See also [`ThetaPhifromUV`](@ref), [`XYZfromUV`](@ref), [`UVfromXYZ`](@ref)
 """
 struct UVfromThetaPhi <: CoordinateTransformations.Transformation end
 """
 	ThetaPhifromUV <: CoordinateTransformations.Transformation
 Convert a 2-D point representing uv pointing coordinates into the same pointing represented in polar angle θ and azimuth angle φ [expressed in rad].
 	
-See also [`UVfromThetaPhi](@ref)
+See also [`UVfromThetaPhi`](@ref), [`XYZfromUV`](@ref), [`UVfromXYZ`](@ref)
 """
 struct ThetaPhifromUV <: CoordinateTransformations.Transformation end
 	
@@ -332,6 +332,62 @@ end
 function (::UVfromThetaPhi)(θφ::StaticVector{2,T}) where T
 	θ,φ = θφ
 	v, u = sin(θ) .* sincos(φ)
+	return SVector(u,v)
+end
+end
+
+# ╔═╡ 42c1d4da-2ac8-4b44-92af-8c5f0a3958e9
+md"""
+## UV <-> XYZ
+"""
+
+# ╔═╡ 31089d3a-e122-4f4a-bf6a-33bd6a7bff3f
+begin
+
+"""
+	UVfromXYZ <: CoordinateTransformations.Transformation
+	(::UVfromXYZ)(xyz::Point3D)
+Convert a 3-D point representing a point in cartesian coordinates for a generic CRS `XYZ` to an pointing direction in U-V, which simply corresponds to the X and Y components (respectively) of the normalized starting point in `XYZ`.
+
+When applying this transformation to a `Point2D` a `SVector{3, Float64}` is returned.
+	
+```julia
+xyz2uv = UVfromXYZ()
+uv = xyz2uv((0,0,100))
+uv == [0,0]
+```
+
+See also [`XYZfromUV`](@ref), [`UVfromThetaPhi`](@ref), [`ThetaPhifromUV`](@ref)
+"""
+struct UVfromXYZ <: CoordinateTransformations.Transformation end
+"""
+	XYZfromUV <: CoordinateTransformations.Transformation
+	(::XYZfromUV)(uv::Point2D)
+Convert a 2-D point representing uv pointing coordinates and a distance `r` into the corresponding 3-D point in the 3-D CRS `XYZ`.
+
+When applying this transformation to a `Point3D` a `SVector{2, Float64}` is returned
+
+```julia
+uv2xyz = XYZfromUV()
+xyz = uv2xyz((0,0), 100)
+xyz == [0,0,100]
+```
+
+See also [`UVfromXYZ`](@ref), [`UVfromThetaPhi`](@ref), [`ThetaPhifromUV`](@ref)
+"""
+struct XYZfromUV <: CoordinateTransformations.Transformation end
+	
+Base.inv(::UVfromXYZ) = XYZfromUV()
+Base.inv(::XYZfromUV) = UVfromXYZ()
+	
+function (::XYZfromUV)(uv::Point2D, r)
+	u,v = uv
+	w = sqrt(1 - (u^2 + v^2))
+	return SVector(u,v,w) * r
+end
+function (::UVfromXYZ)(xyz::Point3D)
+	uvw = normalize(xyz)
+	u,v,w = uvw
 	return SVector(u,v)
 end
 end
@@ -383,9 +439,37 @@ end
 @benchmark _rotation_matrix(Val(:UVfromECEF), x, y) setup=(x=.2;y=.8)
   ╠═╡ =#
 
+# ╔═╡ f582bd71-774b-4745-adb0-5c2bbd00d515
+#=╠═╡
+@benchmark Ref(_rotation_matrix(:UVfromECEF, x, y))[] setup=(x=.2;y=.8)
+  ╠═╡ =#
+
+# ╔═╡ 436a9f46-4a05-41e1-b95a-62deb6337a8d
+#=╠═╡
+@benchmark Ref(_rotation_matrix(:ECEFfromUV, x, y))[] setup=(x=.2;y=.8)
+  ╠═╡ =#
+
 # ╔═╡ fc816e38-ac19-40d7-a2ab-925b97b48910
 #=╠═╡
 @benchmark map((x,y) -> _rotation_matrix(Val(:UVfromECEF), x, y), x,y) setup=(x = rand(1000);y=rand(1000))
+  ╠═╡ =#
+
+# ╔═╡ 1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
+# ╠═╡ skip_as_script = true
+#=╠═╡
+let
+	xyz = SA_F64[0,0,100]
+	UVfromXYZ()(xyz)
+end
+  ╠═╡ =#
+
+# ╔═╡ 88ba47dd-5845-4c36-83bc-d02c3cabcd63
+# ╠═╡ skip_as_script = true
+#=╠═╡
+let
+	uv = (0,0)
+	XYZfromUV()(uv, 100)
+end
   ╠═╡ =#
 
 # ╔═╡ ee3aa19f-317e-46f6-8da2-4792a84b7839
@@ -1614,6 +1698,8 @@ version = "17.4.0+0"
 # ╠═00d31f8c-dd75-4d8f-83b6-d8e976b040d0
 # ╠═f91fbe7d-137f-4e05-a7c7-0486db54e39e
 # ╠═41896117-5597-40e0-b6a1-27bba86398f5
+# ╠═f582bd71-774b-4745-adb0-5c2bbd00d515
+# ╠═436a9f46-4a05-41e1-b95a-62deb6337a8d
 # ╠═fc816e38-ac19-40d7-a2ab-925b97b48910
 # ╠═46730818-1bb8-4c79-8b6f-f8cf0188c918
 # ╠═17d1271f-713d-4a85-b6ef-43e2632b74cf
@@ -1632,6 +1718,10 @@ version = "17.4.0+0"
 # ╠═fcb9caa8-2ee3-469a-8bb7-d462ab4162bd
 # ╠═0ac44137-9d7f-4746-868e-ae09b628f5e0
 # ╠═ef2c3b39-5487-42ec-a006-20e0794ed21e
+# ╟─42c1d4da-2ac8-4b44-92af-8c5f0a3958e9
+# ╠═31089d3a-e122-4f4a-bf6a-33bd6a7bff3f
+# ╠═1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
+# ╠═88ba47dd-5845-4c36-83bc-d02c3cabcd63
 # ╠═ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╟─1c9a8798-0b03-4e50-952e-e615192dbd45
 # ╠═2e07bdfa-7393-4864-be2f-35b7843f6cc8
