@@ -737,8 +737,8 @@ begin
 		# Normalize the xyz vector
 		uv = SVector(xyz[1],xyz[2]) ./  r
 		
-		# Return both the uv coordinates and the slant range
-		return uv, r
+		# Return both the uv coordinates and the full xyz coordinates of the target point in the reference CRS
+		return uv, xyz
 	end
 	# Default version without range
 	(trans::UVfromECEF)(ecef::StaticVector{3}) = trans(ecef,ExtraOutput())[1]
@@ -779,7 +779,7 @@ begin
 	
 	function (trans::UVfromLLA)(lla::LLA, ex::ExtraOutput)
 		ecef = ECEFfromLLA(trans.ellipsoid)(lla)
-		uv, r = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
+		uv, xyz = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
 	end
 	# Single output method
 	(trans::UVfromLLA)(lla::LLA) = trans(lla,ExtraOutput())[1]
