@@ -12,7 +12,7 @@ import TelecomUtils: wgs84_ellipsoid
 
     @testset "Get Range" begin
         @test get_range(sv, (0,0)) ≈ sat_lla.alt
-        @test get_range(sv, (0,0), 1e3) ≈ sat_lla.alt - 1e3
+        @test get_range(sv, (0,0); h= 1e3) ≈ sat_lla.alt - 1e3
     end
 
     @testset "Get Pointing/LLA/ECEF" begin

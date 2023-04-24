@@ -73,9 +73,9 @@ import TelecomUtils: earth_intersection
         uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
         @test !isnan(uv2lla((u * (1-eps()),0))) # We should find a solution because we are pointing slightly less than EoE
         @test isnan(uv2lla((u * (1+eps()),0))) # We should not find a solution because we are pointing slightly more than EoE
-        @test !isnan(uv2lla((u * (1-eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
-        @test !isnan(uv2lla((u * (1+eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
-        @test isnan(uv2lla((u * (1-eps()),0), 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
-        @test !isnan(uv2lla((u * (1+eps()),0), 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
+        @test !isnan(uv2lla((u * (1-eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
+        @test !isnan(uv2lla((u * (1+eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
+        @test isnan(uv2lla((u * (1-eps()),0), h = 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
+        @test !isnan(uv2lla((u * (1+eps()),0), h = 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
     end
 end

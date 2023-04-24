@@ -594,8 +594,9 @@ compute_sat_position(LLA(0°,0°,0), 90°, 0°; h = 7e6)
   ╠═╡ =#
 
 # ╔═╡ 4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
+begin
 # Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth. The optional kwarg h can be provided to find the intersection at an altitude h above the ellipsoid
-function earth_intersection(pointing_ecef,sat_ecef,a,b; h = 0.0)
+function earth_intersection(pointing_ecef,sat_ecef,a,b, ::ExtraOutput; h = 0.0)
 	
 	t₁,t₂ = _intersection_solutions(pointing_ecef,sat_ecef,a + h,b + h)
 
@@ -606,7 +607,7 @@ function earth_intersection(pointing_ecef,sat_ecef,a,b; h = 0.0)
 	# assume there is no solution as both intersection are not in direction of
 	# the provided pointing. In both cases we return a 3d NaN vector
 	if isnan(t) || t < 0 
-		return SA_F64[NaN,NaN,NaN]
+		return SA_F64[NaN,NaN,NaN], NaN
 	end
 
 	# When we reach this point, if a non-zero h was provided, and a solution was found, we also have to make sure that the solution at higher altitude is not actually blocked by the original ellipsoid (earth)
@@ -615,11 +616,13 @@ function earth_intersection(pointing_ecef,sat_ecef,a,b; h = 0.0)
 		t̃ = t̃₁ > 0 ? t̃₁ : t̃₂
 	
 		# If we found two positive solution and the smaller is lower than t, it means that the earth is actually blocking the view to the candidate point, so again we return NaN
-		!isnan(t̃) && t̃ > 0 && t̃ < t && t̃₁ ≠ t̃₂ && return SA_F64[NaN,NaN,NaN]
+		!isnan(t̃) && t̃ > 0 && t̃ < t && t̃₁ ≠ t̃₂ && return SA_F64[NaN,NaN,NaN], NaN
 	end
 	
 	# Compute the ecef coordinates of the intersectinon on earth
-	ecef = sat_ecef + t*pointing_ecef
+	ecef = sat_ecef + t*pointing_ecef, t
+end
+earth_intersection(pointing_ecef,sat_ecef,a,b; kwargs...) = earth_intersection(pointing_ecef,sat_ecef,a,b, ExtraOutput(); kwargs...)[1]
 end
 
 # ╔═╡ ea3e2a47-de2f-4383-8f01-e8fbebbdd605
@@ -693,7 +696,7 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation ECEF UV
 	
-	function (trans::ECEFfromUV)(uv::StaticVector{2},h::Real=0.0)
+	function (trans::ECEFfromUV)(uv::Point2D, eo::ExtraOutput;h::Real=0.0)
 		# Check that the uv coordinates are valid
 		uv² = sum(uv .^ 2)
 		@assert uv² <= 1 "u² + v² > 1, the given uv coordinate vector is not valid"
@@ -703,10 +706,10 @@ begin
 		n̂ = trans.R * p̂
 		sat_ecef = trans.origin
 		a,b = trans.ellipsoid.a, trans.ellipsoid.b
-		ecef = earth_intersection(n̂,sat_ecef,a,b;h)
+		ecef, r = earth_intersection(n̂,sat_ecef,a,b,eo;h)
 	end
-	# Tuple overload
-	(trans::ECEFfromUV)(tup::Tuple{<:Number, <:Number}, h=0.0) = trans(SVector(tup), h)
+	# SingleOutput
+	(trans::ECEFfromUV)(uv::Point2D; kwargs...) = trans(uv, ExtraOutput(); kwargs...)[1]
 	
 	function (trans::UVfromECEF)(ecef::StaticVector{3}, ::ExtraOutput)
 		# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
@@ -737,7 +740,7 @@ begin
 		# Normalize the xyz vector
 		uv = SVector(xyz[1],xyz[2]) ./  r
 		
-		# Return both the uv coordinates and the full xyz coordinates of the target point in the reference CRS
+		# Return both the uv coordinates and the distance to the target point
 		return uv, xyz
 	end
 	# Default version without range
@@ -770,12 +773,13 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation UV LLA
 	
-	function (trans::LLAfromUV)(uv::StaticVector{2},h::Real=0.0)
-		ecef = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,h)
+	function (trans::LLAfromUV)(uv::Point2D,eo::ExtraOutput; h::Real=0.0)
+		ecef, r = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,eo;h)
 		lla = LLAfromECEF(trans.ellipsoid)(ecef)
+		lla, r
 	end
-	# Tuple overload
-	(trans::LLAfromUV)(tup::Tuple{<:Number, <:Number},h::Real=0.0) = trans(SVector(tup),h)
+	# Single Output
+	(trans::LLAfromUV)(uv::Point2D;kwargs...) = trans(uv,ExtraOutput();kwargs...)[1]
 	
 	function (trans::UVfromLLA)(lla::LLA, ex::ExtraOutput)
 		ecef = ECEFfromLLA(trans.ellipsoid)(lla)
@@ -863,8 +867,8 @@ let
 	u = sin(eoe_scan)
 	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
 	uv2lla((u * (1-1e-8),0))
-	uv2lla((u,0), 100)
-	uv2lla((u * (1-1e-6),0), 100)
+	uv2lla((u,0);h= 100)
+	uv2lla((u * (1-1e-6),0);h= 100)
 end
   ╠═╡ =#
 
@@ -929,10 +933,10 @@ let
 	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
 	@test !isnan(uv2lla((u * (1-eps()),0))) # We should find a solution because we are pointing slightly less than EoE
 	@test isnan(uv2lla((u * (1+eps()),0))) # We should not find a solution because we are pointing slightly more than EoE
-	@test !isnan(uv2lla((u * (1-eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
-	@test !isnan(uv2lla((u * (1+eps()),0), 100e3)) # We should find a solution because we are looking at 100km above earth
-	@test isnan(uv2lla((u * (1-eps()),0), 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
-	@test !isnan(uv2lla((u * (1+eps()),0), 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
+	@test !isnan(uv2lla((u * (1-eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
+	@test !isnan(uv2lla((u * (1+eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
+	@test isnan(uv2lla((u * (1-eps()),0), h = 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
+	@test !isnan(uv2lla((u * (1+eps()),0), h = 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
 end
   ╠═╡ =#
 
