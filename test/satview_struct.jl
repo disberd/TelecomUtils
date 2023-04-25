@@ -26,9 +26,9 @@ import TelecomUtils: wgs84_ellipsoid
 
     @testset "Get ERA" begin
         # We test that a non-visible point is NaN
-        @test get_era(sv, LLA(40°, -39°, 0)) |> isnan
+        @test get_era(UserView(LLA(40°, -39°, 0), em), sv) |> isnan
         # We test that a visible point is not NaN, and with the expected value
-        @test get_era(sv,LLA(0,0,500km)) ≈ ERA(90°, 200km, 0°)
+        @test get_era(UserView(LLA(0,0,500km), em), sv) ≈ ERA(90°, 200km, 0°)
     end
 
     @testset "Get Distance on Earth" begin
@@ -37,7 +37,7 @@ import TelecomUtils: wgs84_ellipsoid
         em = EarthModel(sp)
         sv = SatView(LLA(0,0,700km), em)
         target_dist = 2π*r / 360
-        @test get_distance_on_earth(sv, LLA(0°, 0°, 0), LLA(1°, 0°, 0)) ≈ target_dist
+        @test get_distance_on_earth(LLA(0°, 0°, 0), LLA(1°, 0°, 0); em) ≈ target_dist
     end
 
     @testset "Get Nadir Beam Diameter" begin
