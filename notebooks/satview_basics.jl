@@ -433,9 +433,11 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ 11938cb6-46b3-0002-96c0-ef6424d1d0db
+begin
 """
     geod_inverse(geod::Proj4.geod_geodesic, lonlat1::AbstractVector{Cdouble}, lonlat2::AbstractVector{Cdouble})
 	geod_inverse(geod::Proj4.geod_geodesic, lla1::LLA, lla2::LLA)
+	geod_inverse(em::EarthModel, lla1::LLA, lla2::LLA)
 Solve the inverse geodesic problem.
 
 # Args
@@ -465,11 +467,15 @@ function geod_inverse(geod::Proj4.geod_geodesic, lonlat1::AbstractVector{Cdouble
 	dist[], azi1[], azi2[]
 end
 
-# ╔═╡ 11938cb6-46b3-0003-96c0-ef6424d1d0db
+# Version with LLA inputs
 function geod_inverse(geod::Proj4.geod_geodesic, lla1::LLA, lla2::LLA)
 	lonlat1 = rad2deg.(SA_F64[lla1.lon,lla1.lat])
 	lonlat2 = rad2deg.(SA_F64[lla2.lon,lla2.lat])
 	geod_inverse(geod,lonlat1,lonlat2)
+end
+
+# Version with EarthModel as first input
+geod_inverse(em::EarthModel, lla1::LLA, lla2::LLA) = geod_inverse(em.geod, lla1, lla2)
 end
 
 # ╔═╡ 4c06d21c-ac14-4522-bf25-2e0a1ed2d6b9
@@ -481,6 +487,21 @@ begin
 	export LLA, ERA
 	export geod_inverse
 end
+
+# ╔═╡ 52fafdd7-503a-4665-a86f-ddd9fd6552ea
+# ╠═╡ skip_as_script = true
+#=╠═╡
+em = EarthModel()
+  ╠═╡ =#
+
+# ╔═╡ 87dec4f1-3842-4291-ad1c-1a384a197508
+#=╠═╡
+let
+	lla1 = LLA(1°, 2°, 0km)
+	lla2 = LLA(1°, 1°, 0km)
+	@benchmark geod_inverse($em, $lla1, $lla2)
+end
+  ╠═╡ =#
 
 # ╔═╡ 11938cb6-46b3-499b-96c0-ef6424d1d0db
 # ╠═╡ skip_as_script = true
@@ -1185,7 +1206,8 @@ version = "17.4.0+0"
 # ╠═7344190c-7989-4b55-b7be-357f7d6b7370
 # ╠═11938cb6-46b3-0001-96c0-ef6424d1d0db
 # ╠═11938cb6-46b3-0002-96c0-ef6424d1d0db
-# ╠═11938cb6-46b3-0003-96c0-ef6424d1d0db
+# ╠═52fafdd7-503a-4665-a86f-ddd9fd6552ea
+# ╠═87dec4f1-3842-4291-ad1c-1a384a197508
 # ╠═11938cb6-46b3-499b-96c0-ef6424d1d0db
 # ╠═d2c248b1-c48e-437b-a910-edcc59b4424f
 # ╠═7b306ed5-4bda-465d-abf2-4d07cb4642c1
