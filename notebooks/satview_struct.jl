@@ -87,9 +87,6 @@ md"""
 	NegativeZ = -3
 end
 
-# ╔═╡ e1a755fc-8164-4a94-8bff-494f8d95d2f2
-
-
 # ╔═╡ 9e8f0786-1daa-4b9e-9172-fc0767582c7e
 begin
 function to_face(s::Symbol)
@@ -131,16 +128,27 @@ md"""
 # ╔═╡ c6ee08ba-3546-48ea-9801-edc00dfd25f0
 begin
 	"""
-	ReferenceView(lla_or_ecef::Union{LLA, Point3D},earthmodel::EarthModel; kwargs...)
-Object representing the instantaneous position of a satellite and used to compute various view angles to and from points on ground, as well as inverse geodesic computations.
+	rv = ReferenceView{T}(lla_or_ecef::Union{LLA, Point3D},earthmodel::EarthModel; kwargs...)
+	
+A `ReferenceView` instance `rv` tracks the instantaneous position and orientation of an object in space or on earth. It is used to provide convenience methods to assess pointing, distance and visibility between obejcts. It can also be used to extract 3D coordinates (LLA or ECEF) based on pointing angles from the `ReferenceView` instance.
+	
+When initializing `rv`, two convenience aliases can be used:
+- `UserView === ReferenceView{:User}` can be used to represent users
+- `SatView === ReferenceView{:Satellite}` can be used to represent satellites
+
+The main difference between the two is that the default local CRS for computing pointing and visibilities is West-North-Down (+Z towards nadir) for `SatView` while it's East-North-Up (+Z towards Zenith) for `UserView`.
 
 # Fields
 $TYPEDFIELDS
 
-If multiple satellites have to be tracked, the `EarthModel` instance `earthmodel` should be generated once and then passed to all the SatView instances to ensure that all the satellites are referring to the same earth model.\\
+When multiple `ReferenceView` objects have to be modelled/tracked, the `earthmodel` field of all of them should point to the same `EarthModel` instance, so it should be generated once and then passed to the constructor of all the ReferenceView instances to ensure that all the objects are referring to the same earth model.\\
 Doing so will enforce the same Ellipsoid is shared between all satellites even when it is changed from one of the SatView instances.
 
-See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_distance_on_earth`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
+To understand how the fields `rot_z`, `rot_y` and `rot_x` are used to model the rotation applied to the default local CRS to the intended one, see the documentation of [`crs_rotation`](@ref)
+
+The possible values for the reference `face` (defined with respect to the axes of the local CRS) used for pointing/visibility computations can be found looking at [`change_reference_face!`](@ref)
+
+See also: [`change_position!`](@ref), [`change_attitude!`](@ref), [`change_reference_face!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`geod_inverse`](@ref), [`get_distance_on_earth`](@ref), [`get_nadir_beam_diameter`](@ref), [`ExtraOutput`](@ref).
 	"""
 	Base.@kwdef mutable struct ReferenceView{T}
 		"ECEF coordinates of the current satellite position"
@@ -149,15 +157,15 @@ See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref
 		lla::LLA
 		"Reference EarthModel used for the projections and for the geodesic computations"
 		earthmodel::EarthModel
-		"Rotation Matrix to go from the nadir-pointing CRS (WND) to the ECEF CRS"
+		"Rotation Matrix to go from the default local CRS to the ECEF CRS"
 		R::RotMatrix3{Float64}
-		"Rotation angle about the z axis to bring the default satellite CRS (WND) to the current one"
+		"Rotation angle [rad] about the z axis to bring the default local CRS to the current one"
 		rot_z::Float64 = 0
-		"Rotation angle about the y axis to bring the default satellite CRS (WND) to the current one"
+		"Rotation angle [rad] about the y axis to bring the default local CRS to the current one"
 		rot_y::Float64 = 0
-		"Rotation angle about the x axis to bring the default satellite CRS (WND) to the current one"
+		"Rotation angle [rad] about the x axis to bring the default local CRS to the current one"
 		rot_x::Float64 = 0
-		"Face of the satellite used for the pointing computations"
+		"Reference race of the satellite used for the pointing computations"
 		face::Faces = PositiveZ
 	end
 	# Version allow to specify face as Symbol
@@ -189,9 +197,6 @@ See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref
 		ReferenceView{T}(;ecef,lla,earthmodel=em,R, kwargs...)
 	end
 end
-
-# ╔═╡ b0e6b02d-e6f1-4cb2-9638-4578089b02d6
-SA_F64[0,0,1] isa Union{Point3D, LLA}
 
 # ╔═╡ a34ca715-e7f2-4fa7-ba94-8ad3f9b1f4cd
 function Base.getproperty(sv::ReferenceView, name::Symbol)
@@ -449,17 +454,19 @@ md"""
 begin
 """
 	get_range(rv::ReferenceView,uv::Point2D[, ::ExtraOutput]; h = 0.0, face = rv.face, R = nothing)
-	get_range(rv::ReferenceView,lla_or_ecef::Union{LLA, Point3D}[, ::ExtraOutput]; face = sv.face, R = nothing)
+	get_range(rv::ReferenceView,target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; face = rv.face, R = nothing)
 
-Get the range [in m] between the reference view (Satellite or User) and a target point. The target point can be identified in two ways:
+Get the range [in m] between the reference view `rv` (Satellite or User) and a target point. The target point can be identified in two ways:
 - Providing the uv pointing `uv` and the reference altitude `h` [m] above the ellipsoid (first method)
-- directly passing in a point expressed either as `LLA` or as a `Point3D` representing its ECEF coordinates (second method).
+- directly passing in a point expressed either as `LLA`, as a `Point3D` representing its ECEF coordinates, or as another instance of `ReferenceView` (second method).
 
 The pointing is assumed to be reffered to the specified `face` of the `ReferenceView`. When the location identified by the provided pointing is not visible either because it's blocked by earth or because it's in a direction not visible from the specified `face`, `NaN` is returned.
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
 
 The kwarg `R` represents the 3D Rotation Matrix that translates a vector from ECEF coordinates to the coordinates of the desired local CRS around `rv`. By default (if `R === nothing`) this rotation matrix is computed based on the rotation matrix of the `rv` object and on the selected reference face.
+
+See also: [`ReferenceView`](@ref), [`get_era`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_range(sv::ReferenceView,uv::Point2D, eo::ExtraOutput; h = 0.0, face = sv.face, R = nothing)
 	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
@@ -575,17 +582,16 @@ md"""
 # ╔═╡ 83634223-87d0-4c31-801a-af8a7f9f678a
 begin
 """
-	get_pointing(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}[, ::ExtraOutput]; pointing_type::Symbol=:uv)
-	get_pointing(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; pointing_type::Symbol=:uv)
-Provide the 2-D angular pointing at which the target point (specified as LLA or ECEF) is seen from the ReferenceView object `rv`.
-
-When two ReferenceView are given as first two arguments (2nd method), the pointing of `rv2` as seen from `rv1` is given as output
+	get_pointing(rv::ReferenceView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; pointing_type::Symbol=:uv, face = rv.face, R=nothing)
+Provide the 2-D angular pointing at which the target point (specified as LLA, ECEF or as another `ReferenceView`) is seen from the ReferenceView object `rv`.
 
 `pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
 
-See also: [`SatView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
+
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; pointing_type::Symbol=:uv, face = sv.face, R = nothing)
 	ecef = if lla_or_ecef isa LLA
@@ -695,15 +701,15 @@ begin
 
 Computes the ECEF coordinates of the point that is seen by `rv` in the direction specified by `pointing` and is located at a target altitude `h` [m] above the earth's surface.
 
-If a valid point can not be found because earth is blocking the view, the function returns a SVector{3, Float64} filled win NaNs.
+If a valid point can not be found because either earth is blocking the view or no point at altitude `h` can be seen from the provided pointing direction in the `rv` local CRS (also accounting for desired face), the function returns a SVector{3, Float64} filled win NaNs.
 
 `pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
 
-See [`get_range`](@ref) for the definition of the `face` and `R` keyword arguments
+For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
 
-See also: [`SatView`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`change_position!`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_era`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_ecef(rv::ReferenceView, pointing::Point2D, eo::ExtraOutput; pointing_type::Symbol=:uv, h = 0.0, face = rv.face, R = nothing)
 	_R = isnothing(R) ? inv(rv.R * face_rotation(face)) : R 
@@ -752,15 +758,15 @@ begin
 
 Computes the LLA coordinates of the point that is seen by `rv` in the direction specified by `pointing` and is located at a target altitude `h` [m] above the earth's surface.
 
-If a valid point can not be found because earth is blocking the view, the function returns a SVector{3, Float64} filled win NaNs.
+If a valid point can not be found because either earth is blocking the view or no point at altitude `h` can be seen from the provided pointing direction in the `rv` local CRS (also accounting for desired face), the function returns a SVector{3, Float64} filled win NaNs.
 
 `pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
 
-See [`get_range`](@ref) for the definition of the `face` and `R` keyword arguments
+For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
 
-See also: [`SatView`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_era`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_lla(rv::ReferenceView,pointing::Point2D, eo::ExtraOutput; kwargs...)
 	ecef, xyz = get_ecef(rv, pointing, eo; kwargs...)
@@ -862,6 +868,16 @@ md"""
 
 # ╔═╡ f59d34bc-3b19-40ab-b0c6-986e5fa62304
 begin
+"""
+	get_era(uv::UserView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; face = rv.face, R = nothing)
+
+Computes the ERA coordinates of the provided `target` as seen from the `UserView` `uv`.
+`target` can be given either as `LLA`/`ECEF` coordinates or directly as another `ReferenceView`
+
+For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
+
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+"""
 function get_era(uv::UserView, target::Union{LLA, Point3D, ReferenceView}; face = uv.face, R = nothing)	
 	# Get ECEF coordinates of the target
 	ecef = if target isa LLA
@@ -1096,7 +1112,7 @@ function get_nadir_beam_diameter(sv, scan_3db)
 end
 
 # ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
-export ReferenceView, SatView, UserView, change_position!, change_attitude!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter
+export ReferenceView, SatView, UserView, change_position!, change_attitude!, change_reference_face!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, crs_rotation
 
 # ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
 # ╠═╡ skip_as_script = true
@@ -1862,7 +1878,6 @@ version = "17.4.0+0"
 # ╟─a5112e66-c2a2-4ed2-9951-5f97bc1745d5
 # ╟─9e65ad17-95bd-46fa-bc18-9d5e8c501d9a
 # ╠═f1d1295e-7fa1-44d0-bdac-8b7830da8a61
-# ╠═e1a755fc-8164-4a94-8bff-494f8d95d2f2
 # ╠═9e8f0786-1daa-4b9e-9172-fc0767582c7e
 # ╠═93222642-f2a6-4de7-8c92-21c96ef009a4
 # ╠═cb0b070b-f70a-458e-bf72-0a4d2e93ec41
@@ -1870,7 +1885,6 @@ version = "17.4.0+0"
 # ╟─5dc71a85-a20d-4448-98b4-5065a249df1d
 # ╠═c6ee08ba-3546-48ea-9801-edc00dfd25f0
 # ╠═5372f3fe-699a-4f00-8e8e-36cbea224963
-# ╠═b0e6b02d-e6f1-4cb2-9638-4578089b02d6
 # ╠═a34ca715-e7f2-4fa7-ba94-8ad3f9b1f4cd
 # ╠═227c0f3e-6e45-48ac-92d4-d1c1c730e4e0
 # ╠═6eb9424e-3dd2-46d4-b4d2-81596bb81668
