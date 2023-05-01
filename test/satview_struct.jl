@@ -10,6 +10,11 @@ import TelecomUtils: wgs84_ellipsoid
 
     sv = SatView(sat_lla, em)
 
+    @testset "SatView Creation" begin
+        @test SatView(sat_lla, em; face = :PositiveY).face === TelecomUtils.PositiveY
+        @test SatView(sat_lla, em; face = -1).face === TelecomUtils.NegativeX
+    end
+
     @testset "Get Range" begin
         @test get_range(sv, (0,0)) ≈ sat_lla.alt
         @test get_range(sv, (0,0); h= 1e3) ≈ sat_lla.alt - 1e3
@@ -45,5 +50,12 @@ import TelecomUtils: wgs84_ellipsoid
         @test get_nadir_beam_diameter(SatView(LLA(90°,0°,735km), EarthModel()), 55) ≈ get_nadir_beam_diameter(SatView(LLA(0°,0°,735km), EarthModel()), 55)
         # Test that the wgs84 ellipsoid makes a difference in the beam diameter computation
         @test get_nadir_beam_diameter(SatView(LLA(90°,0°,735km), EarthModel(wgs84_ellipsoid)), 55) ≉ get_nadir_beam_diameter(SatView(LLA(0°,0°,735km), EarthModel(wgs84_ellipsoid)), 55)
+    end
+
+    @testset "Unique Earth Model" begin
+        rv1 = SatView(LLA(0,0,600km), EarthModel())
+        rv2 = SatView(LLA(0.1,0.1,600km), EarthModel())
+        # This should error because the two rvs are instantiated with different Earth Model
+        @test_throws "EarthModel" get_pointing(rv1, rv2)
     end
 end

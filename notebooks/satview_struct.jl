@@ -156,6 +156,10 @@ See also: [`change_position!`](@ref), [`get_range`](@ref), [`get_pointing`](@ref
 		"Face of the satellite used for the pointing computations"
 		face::Faces = PositiveZ
 	end
+	# Version allow to specify face as Symbol
+	function ReferenceView{T}(ecef, lla, earthmodel, R, rot_z, rot_y, rot_x, face::Union{Symbol, Int}) where T 
+		ReferenceView{T}(ecef, lla, earthmodel, R, rot_z, rot_y, rot_x, to_face(face))
+	end
 
 	const SatView = ReferenceView{:Satellite}
 	const UserView = ReferenceView{:User}
@@ -388,9 +392,6 @@ let
 	@test WNDfromECEF(rv.ecef, rv.R', em.ellipsoid)(ref_ecef) ≈ SA_F64[-√(100e3^2/2),0,√(100e3^2/2)]
 end
   ╠═╡ =#
-
-# ╔═╡ c2fdc43c-3279-47af-8cd5-bb57a58db574
-
 
 # ╔═╡ 84769564-8ba8-46f5-b494-b0689d9abd65
 # ╠═╡ skip_as_script = true
@@ -1825,7 +1826,6 @@ version = "17.4.0+0"
 # ╟─5c1d0beb-c00c-40a8-b255-c887be99e706
 # ╠═f127481d-c60e-43d0-ab9f-4d4f35984015
 # ╠═3a745709-8f5b-4f22-848a-2f9754ab27d8
-# ╠═c2fdc43c-3279-47af-8cd5-bb57a58db574
 # ╠═84769564-8ba8-46f5-b494-b0689d9abd65
 # ╠═0cde0a71-7f27-4290-88cd-2cccf627926b
 # ╠═bd62bdd6-4de4-449c-b5f1-fb1b4f695cda
