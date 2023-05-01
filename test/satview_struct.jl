@@ -79,6 +79,16 @@ import TelecomUtils: wgs84_ellipsoid, ExtraOutput
         @test get_ecef(sv, (0,1); face = :NegativeY) ≈ lla2ecef(LLA(0,0,0))
     end
 
+    @testset "Get Mutual Pointing" begin
+        sv1 = SatView(LLA(0,0,800km), em)
+        sv2 = SatView(LLA(0,0,1000km), em)
+        p1, p2 = get_mutual_pointing(sv1, sv2)
+        @test isnan(p1) && isapprox(p2, SA_F64[0,0];atol = 1e-10) # The reference face for sv1 is still nadir, so it doesn't see sv2
+
+        p1, p2 = get_mutual_pointing(sv1, sv2; faces = (:NegativeZ, :PositiveZ))
+        @test isapprox(p1, SA_F64[0,0];atol = 1e-10) && isapprox(p2, SA_F64[0,0];atol = 1e-10)
+    end
+
     @testset "Get ERA" begin
         # We test that a non-visible point is NaN
         @test get_era(UserView(LLA(40°, -39°, 0), em), sv) |> isnan
