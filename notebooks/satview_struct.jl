@@ -466,7 +466,7 @@ When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
 
 The kwarg `R` represents the 3D Rotation Matrix that translates a vector from ECEF coordinates to the coordinates of the desired local CRS around `rv`. By default (if `R === nothing`) this rotation matrix is computed based on the rotation matrix of the `rv` object and on the selected reference face.
 
-See also: [`ReferenceView`](@ref), [`get_era`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`ReferenceView`](@ref), [`get_era`](@ref), [`get_mutual_pointing`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_range(sv::ReferenceView,uv::Point2D, eo::ExtraOutput; h = 0.0, face = sv.face, R = nothing)
 	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
@@ -591,7 +591,7 @@ When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
 
 For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
 
-See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`get_mutual_pointing`](@ref), [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
 function get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; pointing_type::Symbol=:uv, face = sv.face, R = nothing)
 	ecef = if lla_or_ecef isa LLA
@@ -683,6 +683,50 @@ let
 	end
 	faces = rand([:PositiveZ, :PositiveY, :NegativeX], 1000)
 	map((x,y) -> get_pointing(sv,x; pointing_type= :thetaphi, face = y), ecef, faces)
+end
+  ╠═╡ =#
+
+# ╔═╡ a61e66cf-b430-4d84-a753-faf42f4b6337
+md"""
+## Get Mutual Pointing
+"""
+
+# ╔═╡ 98f3f83d-fcde-48ba-8855-c30643776d81
+begin
+"""
+	p₁, p₂ = get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; pointing_type::Symbol=:uv, faces = (rv1.face, rv2.face), Rs=(nothing, nothing))
+
+Provide the 2-D angular pointing in both directions between `rv1` and `rv2`:
+- `p₁` is the pointing of `rv2` with respect to `rv1`
+- `p₂` is the pointing of `rv1` with respect to `rv2`
+
+`pointing_type` is used to select whether the outputs should be given in UV or ThetaPhi coordinates. The result are provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
+
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv1` (or `rv2`). In this case:
+- `p₁` is a tuple containing the pointing as well as the local CRS coordinates of `rv2` with respect to `rv1`
+- `p₂` is a tuple containing the pointing as well as the local CRS coordinates of `rv1` with respect to `rv2`
+
+`faces` and `Rs` are tuples containing the values of `face` and `R` for the two ReferenceView objects. `faces[1]` is used as reference face for `rv1` while `faces[2]` is used for `rv2`. Similarly for `Rs`.
+
+For details on how to modify the reference pointing direction using `face` and `R` look at the documentation of [`get_range`](@ref) 
+
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+"""
+function get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; pointing_type = :uv, faces = (rv1.face, rv2.face), Rs = (nothing, nothing))
+	# Pointing of rv2 as seen from rv1
+	p₁ = get_pointing(rv1, rv2, eo; pointing_type, face = faces[1], R = Rs[1])
+	p₂ = get_pointing(rv2, rv1, eo; pointing_type, face = faces[2], R = Rs[2])
+	return p₁, p₂
+end
+get_mutual_pointing(rv1, rv2; kwargs...) = first.(get_mutual_pointing(rv1, rv2, ExtraOutput(); kwargs...))
+end
+
+# ╔═╡ cda9503a-5262-4318-9f5d-aea7910ab42e
+#=╠═╡
+let
+	sv1 = sv
+	sv2 = SatView(LLA(0°,1°, 1000km), em)
+	@benchmark get_mutual_pointing($sv1, $sv2; faces = (-3,3))
 end
   ╠═╡ =#
 
@@ -1112,7 +1156,7 @@ function get_nadir_beam_diameter(sv, scan_3db)
 end
 
 # ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
-export ReferenceView, SatView, UserView, change_position!, change_attitude!, change_reference_face!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, crs_rotation
+export ReferenceView, SatView, UserView, change_position!, change_attitude!, change_reference_face!, get_range, get_era, get_mutual_pointing, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, crs_rotation
 
 # ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
 # ╠═╡ skip_as_script = true
@@ -1205,7 +1249,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0-rc2"
 manifest_format = "2.0"
-project_hash = "1961fc31e271814aebe300c96b08db48f96b94c1"
+project_hash = "efad987aa03145ea3ac873fbc2cc10919135ea44"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1921,6 +1965,9 @@ version = "17.4.0+0"
 # ╠═951fc2e2-ada9-4aad-876a-4cbd46200f6c
 # ╠═a93e2354-34d1-4d1d-ac3c-f4c99099820a
 # ╠═46eb3a4d-c80b-41a0-9333-aaf6411a010c
+# ╟─a61e66cf-b430-4d84-a753-faf42f4b6337
+# ╠═98f3f83d-fcde-48ba-8855-c30643776d81
+# ╠═cda9503a-5262-4318-9f5d-aea7910ab42e
 # ╟─1f27b72f-9a3b-4732-a98e-d216af067072
 # ╠═12330b6f-97b0-4efb-9885-49758bc2f127
 # ╠═bcf6ae44-fa8c-4d89-9fb9-01019098d981
