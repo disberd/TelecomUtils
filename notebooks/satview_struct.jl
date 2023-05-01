@@ -875,6 +875,7 @@ function get_era(uv::UserView, target::Union{LLA, Point3D, ReferenceView}; face 
 	_R = isnothing(R) ? inv(uv.R * face_rotation(face)) : R 
 	ERAfromECEF(uv.ecef, _R, uv.ellipsoid)(ecef)
 end
+get_era(sv::SatView, args...; kwargs...) = error("The first argument to `get_era` must be of type `UserView`.")
 end
 
 # ╔═╡ ee657a11-c976-4128-8bb4-2336a5ecd319
