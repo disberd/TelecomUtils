@@ -88,9 +88,10 @@ md"""
 end
 
 # ╔═╡ e1a755fc-8164-4a94-8bff-494f8d95d2f2
-to_face(n::Int) = Faces(n)
+
 
 # ╔═╡ 9e8f0786-1daa-4b9e-9172-fc0767582c7e
+begin
 function to_face(s::Symbol)
 	s === :PositiveX && return PositiveX
 	s === :PositiveY && return PositiveY
@@ -99,6 +100,9 @@ function to_face(s::Symbol)
 	s === :NegativeY && return NegativeY
 	s === :NegativeZ && return NegativeZ
 	error("Unrecognized")
+end
+to_face(n::Int) = Faces(n)
+to_face(face::Faces) = face
 end
 
 # ╔═╡ 93222642-f2a6-4de7-8c92-21c96ef009a4
@@ -359,6 +363,14 @@ md"""
 """
 
 # ╔═╡ f127481d-c60e-43d0-ab9f-4d4f35984015
+"""
+	change_attitude!(rv::ReferenceView; rot_z = 0.0, rot_y = 0.0, rot_x = 0.0)
+Modify the attitude (local CRS orientation) of `rv` by recomputing its internal rotation matrix as a product of the default location based one and the attitude rotation based on `rot_z`, `rot_y` and `rot_x`.
+
+See [`crs_rotation`](@ref) for details on how the attitude rotation matrix is defined and computed.
+
+See also [`ReferenceView`](ref), [`change_position!`](@ref), [`change_Reference_face!`](@ref)
+"""
 function change_attitude!(rv::ReferenceView; rot_z = 0.0, rot_y = 0.0, rot_x = 0.0)
 	(;ecef, lla) = rv
 	change_position!(rv, ecef, lla ;rot_z, rot_y, rot_x)
@@ -390,6 +402,38 @@ let
 	# 45 degrees around the Z and 45 degrees around the Y axis means that the ref point should be at 45 degrees between the -X and +Z
 	change_attitude!(rv; rot_z = deg2rad(45), rot_y = deg2rad(45))
 	@test WNDfromECEF(rv.ecef, rv.R', em.ellipsoid)(ref_ecef) ≈ SA_F64[-√(100e3^2/2),0,√(100e3^2/2)]
+end
+  ╠═╡ =#
+
+# ╔═╡ 851f1994-22f4-4347-b106-2fa3ea75ebf2
+md"""
+## Change Reference Face
+"""
+
+# ╔═╡ 74d39d15-8d6c-4fb8-8d04-18f32c393ad4
+"""
+	change_reference_face!(rv::ReferenceView, face)
+Modify the reference face that is used to compute the visibilities from object `rv`.
+The face can be specified using an instance of `TelecomUtils.Faces` (not exported), a Symbol or an Int as follows:   
+- TelecomUtils.PositiveX **or** :PositiveX **or** 1
+- TelecomUtils.PositiveY **or** :PositiveY **or** 2
+- TelecomUtils.PositiveZ  **or** :PositiveZ **or** 3
+- TelecomUtils.NegativeX **or** :NegativeX **or** -1
+- TelecomUtils.NegativeY **or** :NegativeY **or** -2
+- TelecomUtils.NegativeZ **or** :NegativeZ **or** -3
+
+See also [`ReferenceView`](ref), [`change_position!`](@ref), [`change_attitude!`](@ref)
+"""
+function change_reference_face!(rv::ReferenceView, face)
+	setfield!(rv, :face, to_face(face))
+	return rv
+end
+
+# ╔═╡ 8b68c7c2-5cbd-4edd-9739-0d2e8c7f5449
+#=╠═╡
+let
+	rv = SatView(LLA(0,0,500km), em)
+	change_reference_face!(rv, :NegativeZ)
 end
   ╠═╡ =#
 
@@ -1841,6 +1885,9 @@ version = "17.4.0+0"
 # ╟─5c1d0beb-c00c-40a8-b255-c887be99e706
 # ╠═f127481d-c60e-43d0-ab9f-4d4f35984015
 # ╠═3a745709-8f5b-4f22-848a-2f9754ab27d8
+# ╟─851f1994-22f4-4347-b106-2fa3ea75ebf2
+# ╠═74d39d15-8d6c-4fb8-8d04-18f32c393ad4
+# ╠═8b68c7c2-5cbd-4edd-9739-0d2e8c7f5449
 # ╠═84769564-8ba8-46f5-b494-b0689d9abd65
 # ╠═33e4c937-4443-4d97-a3ed-81479ede1e11
 # ╠═0cde0a71-7f27-4290-88cd-2cccf627926b
