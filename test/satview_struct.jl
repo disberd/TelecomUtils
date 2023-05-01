@@ -18,6 +18,10 @@ import TelecomUtils: wgs84_ellipsoid
     @testset "Get Range" begin
         @test get_range(sv, (0,0)) ≈ sat_lla.alt
         @test get_range(sv, (0,0); h= 1e3) ≈ sat_lla.alt - 1e3
+        @test get_range(sv, SatView(LLA(0,0,600km), em)) ≈ 100e3 # 2 ReferenceViews
+        @test_throws "EarthModel" get_range(sv, SatView(LLA(0,0,500km), EarthModel())) # Different EarthModels
+        @test get_range(sv, SatView(LLA(0,0,800km), em)) |> isnan # The target is above the satellite, so not visible from the reference face
+        @test get_range(sv, SatView(LLA(0,0,800km), em); face = :NegativeZ) ≈ 100e3 # The target is above the satellite, so it's visible from -Z
     end
 
     @testset "Get Pointing/LLA/ECEF" begin

@@ -438,17 +438,32 @@ function get_range(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, ::ExtraO
 	Δecef = ecef - sv.ecef
 	dist = norm(Δecef)
 	# Find if the target point is below the satellite, we do this by checking the last coordinate of the WND coordinates of the point
-	xyz = _R' * Δecef
+	xyz = _R * Δecef
 	xyz[3] < 0 && return NaN, xyz
 	# We have to check that the given lla is visible from the satellite, this happens if either there is no intersection with earth in the direction of pointing, or if the first intersection happens for a range greater than th computed one
 	t₁, t₂ = _intersection_solutions(Δecef/dist, sv.ecef, sv.ellipsoid.a, sv.ellipsoid.b)
-	r = (isnan(t₁) || t₁ > dist-1e-5) ? dist : NaN
+	ref_t = t₁ > 0 ? t₁ : t₂ # t₁ always < t₂, so if positive that is the shortest distance, if negative t₂ might be also negative or positive, so we choose that
+	r = (
+		ref_t > 0 && # Check that the intersection is in the direction of pointing
+		ref_t < dist + 1e-5 # We aim for a precision of 1e-5 m. if ref_t is lower than the distance, it means that the target is behind earth
+		) ? NaN : dist
 	return r, xyz
 end
 
 # Single Output Version
 get_range(rv, p; kwargs...) = get_range(rv, p, ExtraOutput(); kwargs...)[1]
+
+# 2 ReferenceView version
+function get_range(rv1::ReferenceView, rv2::ReferenceView, args...; kwargs...)
+	@assert rv1.earthmodel === rv2.earthmodel "When computing range between ReferenceView objects, the `EarthModel` they use internally must be the same"
+	get_range(rv1, rv2.ecef, args...; kwargs...)
 end
+end
+
+# ╔═╡ 33e4c937-4443-4d97-a3ed-81479ede1e11
+#=╠═╡
+get_range(sv, SatView(LLA(0,0,700km), em); face = :NegativeZ)
+  ╠═╡ =#
 
 # ╔═╡ bd62bdd6-4de4-449c-b5f1-fb1b4f695cda
 #=╠═╡
@@ -1827,6 +1842,7 @@ version = "17.4.0+0"
 # ╠═f127481d-c60e-43d0-ab9f-4d4f35984015
 # ╠═3a745709-8f5b-4f22-848a-2f9754ab27d8
 # ╠═84769564-8ba8-46f5-b494-b0689d9abd65
+# ╠═33e4c937-4443-4d97-a3ed-81479ede1e11
 # ╠═0cde0a71-7f27-4290-88cd-2cccf627926b
 # ╠═bd62bdd6-4de4-449c-b5f1-fb1b4f695cda
 # ╠═21bc362a-960c-4c5f-9118-7e1451edb996
