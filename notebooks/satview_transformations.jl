@@ -307,14 +307,14 @@ begin
 	UVfromThetaPhi <: CoordinateTransformations.Transformation
 Convert a 2-D point representing θ,φ pointing angles [in rad] in the uv coordinates. Theta (θ) and Phi (φ) follow the ISO convention for spherical coordinates so represent the polar and azimuth angle respectively.
 	
-See also [`ThetaPhifromUV](@ref)
+See also [`ThetaPhifromUV`](@ref), [`XYZfromUV`](@ref), [`UVfromXYZ`](@ref)
 """
 struct UVfromThetaPhi <: CoordinateTransformations.Transformation end
 """
 	ThetaPhifromUV <: CoordinateTransformations.Transformation
 Convert a 2-D point representing uv pointing coordinates into the same pointing represented in polar angle θ and azimuth angle φ [expressed in rad].
 	
-See also [`UVfromThetaPhi](@ref)
+See also [`UVfromThetaPhi`](@ref), [`XYZfromUV`](@ref), [`UVfromXYZ`](@ref)
 """
 struct ThetaPhifromUV <: CoordinateTransformations.Transformation end
 	
@@ -332,6 +332,62 @@ end
 function (::UVfromThetaPhi)(θφ::StaticVector{2,T}) where T
 	θ,φ = θφ
 	v, u = sin(θ) .* sincos(φ)
+	return SVector(u,v)
+end
+end
+
+# ╔═╡ 42c1d4da-2ac8-4b44-92af-8c5f0a3958e9
+md"""
+## UV <-> XYZ
+"""
+
+# ╔═╡ 31089d3a-e122-4f4a-bf6a-33bd6a7bff3f
+begin
+
+"""
+	UVfromXYZ <: CoordinateTransformations.Transformation
+	(::UVfromXYZ)(xyz::Point3D)
+Convert a 3-D point representing a point in cartesian coordinates for a generic CRS `XYZ` to an pointing direction in U-V, which simply corresponds to the X and Y components (respectively) of the normalized starting point in `XYZ`.
+
+When applying this transformation to a `Point2D` a `SVector{3, Float64}` is returned.
+	
+```julia
+xyz2uv = UVfromXYZ()
+uv = xyz2uv((0,0,100))
+uv == [0,0]
+```
+
+See also [`XYZfromUV`](@ref), [`UVfromThetaPhi`](@ref), [`ThetaPhifromUV`](@ref)
+"""
+struct UVfromXYZ <: CoordinateTransformations.Transformation end
+"""
+	XYZfromUV <: CoordinateTransformations.Transformation
+	(::XYZfromUV)(uv::Point2D)
+Convert a 2-D point representing uv pointing coordinates and a distance `r` into the corresponding 3-D point in the 3-D CRS `XYZ`.
+
+When applying this transformation to a `Point3D` a `SVector{2, Float64}` is returned
+
+```julia
+uv2xyz = XYZfromUV()
+xyz = uv2xyz((0,0), 100)
+xyz == [0,0,100]
+```
+
+See also [`UVfromXYZ`](@ref), [`UVfromThetaPhi`](@ref), [`ThetaPhifromUV`](@ref)
+"""
+struct XYZfromUV <: CoordinateTransformations.Transformation end
+	
+Base.inv(::UVfromXYZ) = XYZfromUV()
+Base.inv(::XYZfromUV) = UVfromXYZ()
+	
+function (::XYZfromUV)(uv::Point2D, r)
+	u,v = uv
+	w = sqrt(1 - (u^2 + v^2))
+	return SVector(u,v,w) * r
+end
+function (::UVfromXYZ)(xyz::Point3D)
+	uvw = normalize(xyz)
+	u,v,w = uvw
 	return SVector(u,v)
 end
 end
@@ -377,6 +433,44 @@ begin
 	end
 	_rotation_matrix(::Union{Val{:UVfromECEF},Val{:WNDfromECEF},Val{:UVfromLLA}},lat,lon)::RotMatrix3{Float64} = inv(_rotation_matrix(Val(:ECEFfromUV),lat,lon))
 end
+
+# ╔═╡ 41896117-5597-40e0-b6a1-27bba86398f5
+#=╠═╡
+@benchmark _rotation_matrix(Val(:UVfromECEF), x, y) setup=(x=.2;y=.8)
+  ╠═╡ =#
+
+# ╔═╡ f582bd71-774b-4745-adb0-5c2bbd00d515
+#=╠═╡
+@benchmark Ref(_rotation_matrix(:UVfromECEF, x, y))[] setup=(x=.2;y=.8)
+  ╠═╡ =#
+
+# ╔═╡ 436a9f46-4a05-41e1-b95a-62deb6337a8d
+#=╠═╡
+@benchmark Ref(_rotation_matrix(:ECEFfromUV, x, y))[] setup=(x=.2;y=.8)
+  ╠═╡ =#
+
+# ╔═╡ fc816e38-ac19-40d7-a2ab-925b97b48910
+#=╠═╡
+@benchmark map((x,y) -> _rotation_matrix(Val(:UVfromECEF), x, y), x,y) setup=(x = rand(1000);y=rand(1000))
+  ╠═╡ =#
+
+# ╔═╡ 1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
+# ╠═╡ skip_as_script = true
+#=╠═╡
+let
+	xyz = SA_F64[0,0,100]
+	UVfromXYZ()(xyz)
+end
+  ╠═╡ =#
+
+# ╔═╡ 88ba47dd-5845-4c36-83bc-d02c3cabcd63
+# ╠═╡ skip_as_script = true
+#=╠═╡
+let
+	uv = (0,0)
+	XYZfromUV()(uv, 100)
+end
+  ╠═╡ =#
 
 # ╔═╡ ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╠═╡ skip_as_script = true
@@ -550,7 +644,8 @@ function _intersection_solutions(pointing_ecef,sat_ecef,a,b)
 	# Compute the two possible values of t
 	t₁ = (-β - √Δ)/2α	
 	t₂ = (-β + √Δ)/2α
-	
+
+	# t₁ < t₂ is always true
 	return t₁,t₂
 end
 
@@ -583,19 +678,61 @@ compute_sat_position(LLA(0°,0°,0), 90°, 0°; h = 7e6)
   ╠═╡ =#
 
 # ╔═╡ 4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
-# Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth 
-function earth_intersection(pointing_ecef,sat_ecef,a,b)
+begin
+# Get the ECEF coordinates of the point where the direction of view from the satellite intercept the earth. The optional kwarg h can be provided to find the intersection at an altitude h above the ellipsoid
+function earth_intersection(pointing_ecef,sat_ecef,a,b, ::ExtraOutput; h = 0.0)
 	
-	t₁,t₂ = _intersection_solutions(pointing_ecef,sat_ecef,a,b)
+	t₁,t₂ = _intersection_solutions(pointing_ecef,sat_ecef,a + h,b + h)
+
+	# By definition we have t₂ > t₁ so we can already find the lower positive value of the two
+	t = t₁ > 0 ? t₁ : t₂
 	
-	# If no solution exists, t₁ is NaN, so we return a 3d NaN vector
-	isnan(t₁) && return SA_F64[NaN,NaN,NaN]
+	# If no solution exists, t₁ is NaN while if both solution are negative we
+	# assume there is no solution as both intersection are not in direction of
+	# the provided pointing. In both cases we return a 3d NaN vector
+	if isnan(t) || t < 0 
+		return SA_F64[NaN,NaN,NaN], NaN
+	end
+
+	# When we reach this point, if a non-zero h was provided, and a solution was found, we also have to make sure that the solution at higher altitude is not actually blocked by the original ellipsoid (earth)
+	if h ≠ 0
+		t̃₁, t̃₂ =  _intersection_solutions(pointing_ecef,sat_ecef,a,b)
+		t̃ = t̃₁ > 0 ? t̃₁ : t̃₂
 	
-	t = abs(t₁) < abs(t₂) ? t₁ : t₂
+		# If we found two positive solution and the smaller is lower than t, it means that the earth is actually blocking the view to the candidate point, so again we return NaN
+		!isnan(t̃) && t̃ > 0 && t̃ < t && t̃₁ ≠ t̃₂ && return SA_F64[NaN,NaN,NaN], NaN
+	end
 	
 	# Compute the ecef coordinates of the intersectinon on earth
-	ecef = sat_ecef + t*pointing_ecef
+	ecef = sat_ecef + t*pointing_ecef, t
 end
+earth_intersection(pointing_ecef,sat_ecef,a,b; kwargs...) = earth_intersection(pointing_ecef,sat_ecef,a,b, ExtraOutput(); kwargs...)[1]
+end
+
+# ╔═╡ ea3e2a47-de2f-4383-8f01-e8fbebbdd605
+#=╠═╡
+let
+	sat_ecef = SA_F64[1e7, 0, 0]
+	pointing_ecef = SA_F64[-1, 0, 0]
+	sp = SphericalEllipsoid()
+	@benchmark earth_intersection($pointing_ecef, $sat_ecef, $(sp.a), $(sp.b))
+end	
+  ╠═╡ =#
+
+# ╔═╡ d788faa8-df04-4a14-bef0-d76f85a9175e
+#=╠═╡
+let
+	sat_ecef = SA_F64[1e7, 0, 0]
+	pointing_ecef = SA_F64[-1, 0, 0]
+	sp = SphericalEllipsoid()
+	@benchmark earth_intersection($pointing_ecef, $sat_ecef, $(sp.a), $(sp.b); h = 100)
+end	
+  ╠═╡ =#
+
+# ╔═╡ 5cea5fed-1cee-41f3-bcdf-2d81e96c72d4
+#=╠═╡
+@benchmark _intersection_solutions(SA_F64[100,0,0], SA_F64[-1,0,0], 10,10)
+  ╠═╡ =#
 
 # ╔═╡ 7ab00d88-9f0c-4ad9-a735-6ef845055823
 # ╠═╡ skip_as_script = true
@@ -643,20 +780,20 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation ECEF UV
 	
-	function (trans::ECEFfromUV)(uv::StaticVector{2},h::Real=0.0)
+	function (trans::ECEFfromUV)(uv::Point2D, eo::ExtraOutput;h::Real=0.0)
 		# Check that the uv coordinates are valid
 		uv² = sum(uv .^ 2)
 		@assert uv² <= 1 "u² + v² > 1, the given uv coordinate vector is not valid"
-		# Compute the 3d versor identifying the pointing direction from the satellite in WND coordinates
+		# Compute the 3d versor identifying the pointing direction from the satellite in the local CRS coordinates
 		p̂ = SA_F64[uv..., sqrt(1 - uv²)]
 		# Translate the versor in ECEF coordinates
 		n̂ = trans.R * p̂
 		sat_ecef = trans.origin
 		a,b = trans.ellipsoid.a, trans.ellipsoid.b
-		ecef = earth_intersection(n̂,sat_ecef,a+h,b+h)
+		ecef, r = earth_intersection(n̂,sat_ecef,a,b,eo;h)
 	end
-	# Tuple overload
-	(trans::ECEFfromUV)(tup::Tuple{<:Number, <:Number}, h=0.0) = trans(SVector(tup), h)
+	# SingleOutput
+	(trans::ECEFfromUV)(uv::Point2D; kwargs...) = trans(uv, ExtraOutput(); kwargs...)[1]
 	
 	function (trans::UVfromECEF)(ecef::StaticVector{3}, ::ExtraOutput)
 		# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
@@ -673,18 +810,21 @@ begin
 		# If t > t₁ then the earth is blocking the view point so we return NaN
 		
 		# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision
-		!isnan(t₁) && t > t₁+1e-3 && return SA_F64[NaN,NaN], NaN
+		t₁ > 0 && t > t₁+1e-3 && return SA_F64[NaN,NaN], NaN
 		
-		# Find the coordinates in the West-North-Down CRS
-		wnd = trans.R * pdiff
+		# Find the coordinates in the satellite CRS
+		xyz = trans.R * pdiff
+
+		# If the target is behind (so D is negative), we assume that it's not visible
+		xyz[3] < 0 && return SA_F64[NaN,NaN], NaN
 		
 		# Find the slant range between the satellite and the point
-		r = norm(wnd)
+		r = norm(xyz)
 		
-		# Normalize the wnd vector
-		uv = SVector(wnd[1],wnd[2]) ./  r
+		# Normalize the xyz vector
+		uv = SVector(xyz[1],xyz[2]) ./  r
 		
-		# Return both the uv coordinates and the slant range
+		# Return both the uv coordinates and the distance to the target point
 		return uv, r
 	end
 	# Default version without range
@@ -717,16 +857,17 @@ begin
 	# Define the transformations structs and constructors
 	@sat_transformation UV LLA
 	
-	function (trans::LLAfromUV)(uv::StaticVector{2},h::Real=0.0)
-		ecef = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,h)
+	function (trans::LLAfromUV)(uv::Point2D,eo::ExtraOutput; h::Real=0.0)
+		ecef, r = ECEFfromUV(trans.origin,trans.R,trans.ellipsoid)(uv,eo;h)
 		lla = LLAfromECEF(trans.ellipsoid)(ecef)
+		lla, r
 	end
-	# Tuple overload
-	(trans::LLAfromUV)(tup::Tuple{<:Number, <:Number},h::Real=0.0) = trans(SVector(tup),h)
+	# Single Output
+	(trans::LLAfromUV)(uv::Point2D;kwargs...) = trans(uv,ExtraOutput();kwargs...)[1]
 	
 	function (trans::UVfromLLA)(lla::LLA, ex::ExtraOutput)
 		ecef = ECEFfromLLA(trans.ellipsoid)(lla)
-		uv, r = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
+		uv, xyz = UVfromECEF(trans.origin,trans.R,trans.ellipsoid)(ecef, ex)
 	end
 	# Single output method
 	(trans::UVfromLLA)(lla::LLA) = trans(lla,ExtraOutput())[1]
@@ -758,13 +899,11 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ 89eb0e56-e1d5-4497-8de2-3eed528f6358
-# ╠═╡ skip_as_script = true
 #=╠═╡
 @benchmark $ECEFfromLLA()($LLA(10°,10°,1000km))
   ╠═╡ =#
 
 # ╔═╡ 61ace485-dc58-42dd-a58f-1cd13e1f6444
-# ╠═╡ skip_as_script = true
 #=╠═╡
 @benchmark $LLAfromECEF()(SA_F64[1e7,1e6,1e6])
   ╠═╡ =#
@@ -788,6 +927,35 @@ let
 end
   ╠═╡ =#
 
+# ╔═╡ 4e2b42d8-cd4f-4e29-b519-b7139a83be02
+md"""
+## Earth Intersection
+"""
+
+# ╔═╡ c9c9402e-c80d-4a31-9a24-f6363be60e7c
+# ╠═╡ skip_as_script = true
+#=╠═╡
+begin
+	sp = SphericalEllipsoid()
+	l2e = ECEFfromLLA(sp)
+end
+  ╠═╡ =#
+
+# ╔═╡ c34baa23-8483-4626-a17f-3d46ca162934
+#=╠═╡
+let
+	# We check the erath intersection at the tangent between satellite and earth ellipsoid
+	sat_lla = LLA(0,0,600km)
+	sat_ecef = l2e(sat_lla)
+	eoe_scan = asin(sp.a / (sp.a + sat_lla.alt))
+	u = sin(eoe_scan)
+	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+	uv2lla((u * (1-1e-8),0))
+	uv2lla((u,0);h= 100)
+	uv2lla((u * (1-1e-6),0);h= 100)
+end
+  ╠═╡ =#
+
 # ╔═╡ f836fc27-91aa-49f6-a67c-94f8c1f4a607
 md"""
 ## LLA <-> UV
@@ -804,7 +972,7 @@ let
 		LLA(-1°, 0°, 0km), # Bottom - U 0, V Negative
 	]
 	target_uv = map(target_lla) do lla
-		UVfromLLA(sat_lla; ellipsoid=SphericalEllipsoid())(lla) |> normalize
+		UVfromLLA(sat_lla; ellipsoid=sp)(lla) |> normalize
 	end
 	@test all([
 		target_uv[1] == [-1,0],
@@ -812,6 +980,60 @@ let
 		target_uv[3] == [1,0],
 		target_uv[4] == [0,-1],
 	])
+end
+  ╠═╡ =#
+
+# ╔═╡ cbafedbf-adea-4249-b681-fc2f4816ebb9
+#=╠═╡
+let
+	sat_lla = LLA(0°, 0°, 600km)
+	target_lla = LLA(0°, 0°, 610km)
+	target_uv =	UVfromLLA(sat_lla; ellipsoid=sp)(target_lla)
+	@test all(isnan.(target_uv))
+end
+  ╠═╡ =#
+
+# ╔═╡ c4a101fc-b7d2-41cb-9252-9fbad7811957
+#=╠═╡
+let
+	lla2ecef = ECEFfromLLA(sp)
+	sat_lla = LLA(0°, 0°, 600km)
+	sat_ecef = lla2ecef(sat_lla)
+	R = _rotation_matrix(Val(:ECEFfromWND), sat_lla.lat, sat_lla.lon) * RotY(180°)
+	target_lla = LLA(0°, 0°, 610km)
+	target_uv =	UVfromLLA(sat_ecef, R', sp)(target_lla)
+	@test all(map(!isnan,target_uv))
+end
+  ╠═╡ =#
+
+# ╔═╡ 84c178cb-72bb-4aae-8ce0-5284b7b4a58d
+#=╠═╡
+let         
+	# We find the pointing that corresponds to Edge of Earth and check various combination in its vicinity
+	sat_lla = LLA(0,0,600km)
+	sat_ecef = l2e(sat_lla)
+	eoe_scan = asin(sp.a / (sp.a + sat_lla.alt))
+	u = sin(eoe_scan)
+	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+	@test !isnan(uv2lla((u * (1-eps()),0))) # We should find a solution because we are pointing slightly less than EoE
+	@test isnan(uv2lla((u * (1+eps()),0))) # We should not find a solution because we are pointing slightly more than EoE
+	@test !isnan(uv2lla((u * (1-eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
+	@test !isnan(uv2lla((u * (1+eps()),0), h = 100e3)) # We should find a solution because we are looking at 100km above earth
+	@test isnan(uv2lla((u * (1-eps()),0), h = 700e3)) # We should not find a solution because we are looking at 100km above the satellite alitude and with an angle slightly lower than eoe scan, so the corresponding valid point in the pointing direction is located behind earth
+	@test !isnan(uv2lla((u * (1+eps()),0), h = 700e3)) # We should find a solution because we are pointing more than eoe_scan so the earth is not blocking the view of the corresponding point
+end
+  ╠═╡ =#
+
+# ╔═╡ 83a29fe9-ad7a-4e7d-ba05-e6b3ce45c0c3
+#=╠═╡
+let
+	sat_lla = LLA(0,0,600km)
+	uv2lla = LLAfromUV(sat_lla; ellipsoid = sp)
+	lla2uv = inv(uv2lla)
+	target_uv = SA_F64[0.1,0.1]
+	target_lla, r = uv2lla(target_uv, ExtraOutput())
+	uv2, r2 = lla2uv(target_lla, ExtraOutput())
+	@test uv2 ≈ target_uv && r2 ≈ r
 end
   ╠═╡ =#
 
@@ -1488,6 +1710,10 @@ version = "17.4.0+0"
 # ╟─3cc3b232-01e8-4064-8a2a-abe14aa6e5c0
 # ╠═00d31f8c-dd75-4d8f-83b6-d8e976b040d0
 # ╠═f91fbe7d-137f-4e05-a7c7-0486db54e39e
+# ╠═41896117-5597-40e0-b6a1-27bba86398f5
+# ╠═f582bd71-774b-4745-adb0-5c2bbd00d515
+# ╠═436a9f46-4a05-41e1-b95a-62deb6337a8d
+# ╠═fc816e38-ac19-40d7-a2ab-925b97b48910
 # ╠═46730818-1bb8-4c79-8b6f-f8cf0188c918
 # ╠═17d1271f-713d-4a85-b6ef-43e2632b74cf
 # ╠═965e7534-cc27-4657-b3cf-5a5b36be2a9c
@@ -1505,6 +1731,10 @@ version = "17.4.0+0"
 # ╠═fcb9caa8-2ee3-469a-8bb7-d462ab4162bd
 # ╠═0ac44137-9d7f-4746-868e-ae09b628f5e0
 # ╠═ef2c3b39-5487-42ec-a006-20e0794ed21e
+# ╟─42c1d4da-2ac8-4b44-92af-8c5f0a3958e9
+# ╠═31089d3a-e122-4f4a-bf6a-33bd6a7bff3f
+# ╠═1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
+# ╠═88ba47dd-5845-4c36-83bc-d02c3cabcd63
 # ╠═ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╟─1c9a8798-0b03-4e50-952e-e615192dbd45
 # ╠═2e07bdfa-7393-4864-be2f-35b7843f6cc8
@@ -1523,7 +1753,10 @@ version = "17.4.0+0"
 # ╟─95704330-4d7b-44fd-b8c0-d1570812f619
 # ╠═2e788b78-e5e0-4f60-aa8c-ad4f203c982e
 # ╠═4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
+# ╠═ea3e2a47-de2f-4383-8f01-e8fbebbdd605
+# ╠═d788faa8-df04-4a14-bef0-d76f85a9175e
 # ╠═2af585a1-05d0-4b5a-9ee6-15eabb40a27c
+# ╠═5cea5fed-1cee-41f3-bcdf-2d81e96c72d4
 # ╠═7ab00d88-9f0c-4ad9-a735-6ef845055823
 # ╠═f634d5d0-bb61-4bd6-9b1c-df75399de739
 # ╠═8b3f7041-ce2f-4d64-a135-9403eacd6385
@@ -1539,7 +1772,14 @@ version = "17.4.0+0"
 # ╠═61ace485-dc58-42dd-a58f-1cd13e1f6444
 # ╠═76da884a-60ff-4b24-bd1f-7d5d8824ab35
 # ╠═b07c6df9-586e-4a4c-be16-cc4ac7b1f704
+# ╟─4e2b42d8-cd4f-4e29-b519-b7139a83be02
+# ╠═c9c9402e-c80d-4a31-9a24-f6363be60e7c
+# ╠═c34baa23-8483-4626-a17f-3d46ca162934
 # ╟─f836fc27-91aa-49f6-a67c-94f8c1f4a607
 # ╠═7eff4ca6-5e48-49ac-95cc-5256f8f4e0f7
+# ╠═cbafedbf-adea-4249-b681-fc2f4816ebb9
+# ╠═c4a101fc-b7d2-41cb-9252-9fbad7811957
+# ╠═84c178cb-72bb-4aae-8ce0-5284b7b4a58d
+# ╠═83a29fe9-ad7a-4e7d-ba05-e6b3ce45c0c3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
