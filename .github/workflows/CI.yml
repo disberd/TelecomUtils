@@ -1,6 +1,9 @@
 name: CI
 on:
   push:
+    paths-ignore:
+      - README.md
+      - .github/**
     branches:
       - master
     tags: ['*']
