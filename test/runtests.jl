@@ -4,7 +4,7 @@ using StaticArrays
 
 @testset verbose=true "TelecomUtils.jl" begin
     Base.isnan(v::StaticArray) = any(isnan, v)
-    include("satview_basics.jl")
-    include("satview_transformations.jl")
-    include("satview_struct.jl")
+    include("refview_basics.jl")
+    include("refview_transformations.jl")
+    include("refview_struct.jl")
 end
