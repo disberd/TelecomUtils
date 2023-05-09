@@ -19,9 +19,9 @@ export wgs84_ellipsoid
 
 include("../notebooks/utils.jl")
 include("../notebooks/snr2speff.jl")
-include("../notebooks/satview_basics.jl")
-include("../notebooks/satview_transformations.jl")
-include("../notebooks/satview_struct.jl")
+include("../notebooks/refview_basics.jl")
+include("../notebooks/refview_transformations.jl")
+include("../notebooks/refview_struct.jl")
 
 
 end
