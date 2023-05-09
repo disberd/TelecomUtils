@@ -4,6 +4,9 @@ using DocStringExtensions
 using PlutoDevMacros
 using StaticArrays
 using LinearAlgebra
+using Rotations
+using CoordinateTransformations
+import SatelliteToolbox: geodetic_to_ecef, ecef_to_geodetic, wgs84_ellipsoid
 
 # Create the filtering functions for include calls from PlutoDevMacros
 # exclude_exprs = vcat(PlutoDevMacros.default_exprlist,[Symbol("@test"), :(using InteractiveUtils)])
