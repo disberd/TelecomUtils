@@ -42,6 +42,14 @@ md"""
   ╠═╡ =#
 
 # ╔═╡ 35450d8d-cda5-46ba-884e-636abf023ac1
+"""
+	abstract type CapacityComputationType end
+Abstract type used to specify different capacity to snr mapping for different air interfaces (or Shannon formula).
+
+The [`speff2snr`](@ref), [`snr2speff`](@ref) function must be defined on each of its concrete subtypes.
+
+See [`Shannon`](@ref), [`NR5G`](@ref) and [`DVBS2x`](@ref) as the currently implemented conrete subtypes.
+"""
 abstract type CapacityComputationType end
 
 # ╔═╡ a1158d4b-38cc-4c9b-a949-e94e98c2b5f6
@@ -161,11 +169,12 @@ md"""
 """
 	speff2snr(DVBS2x(), η)
 	speff2snr(Shannon(), η)
+	speff2snr(NR5G(), η)
 Computes the minimum SNR [linear] that is required to achieve the target spectral efficiency `η` [b/s/Hz].
 
-The first argument specifies whether to use the DVBS2x thresholds or the Shannon formula for the computation
+The first argument specifies whether to use the DVBS2x or 5G NR thresholds or the Shannon formula for the computation
 
-See also: [`DVBS2x`](@ref), [`Shannon`](@ref), [`snr2speff`](@ref)
+See also: [`DVBS2x`](@ref), [`Shannon`](@ref), [`NR5G`](@ref), [`snr2speff`](@ref)
 """
 speff2snr(::DVBS2x, η) = η > dvbs2x_modcod_speff[end] ? NaN : dvbs2x_thresholds_linear[ceil(Int,_dvbs2x_itp_speff(η))]
 
@@ -173,11 +182,12 @@ speff2snr(::DVBS2x, η) = η > dvbs2x_modcod_speff[end] ? NaN : dvbs2x_threshold
 """
 	snr2speff(DVBS2x(), linear_snr)
 	snr2speff(Shannon(), linear_snr)
+	snr2speff(NR5G(), linear_snr)
 Computes the minimum the spectral efficiency `η` [b/s/Hz] that can be achieved given the input SNR [linear] `linear_snr`.
 
-The first argument specifies whether to use the DVBS2x thresholds or the Shannon formula for the computation.
+The first argument specifies whether to use the DVBS2x or 5G NR thresholds or the Shannon formula for the computation.
 
-See also: [`DVBS2x`](@ref), [`Shannon`](@ref), [`speff2snr`](@ref)
+See also: [`DVBS2x`](@ref), [`Shannon`](@ref), [`NR5G`](@ref), [`speff2snr`](@ref)
 """
 snr2speff(::DVBS2x, snr) = snr < dvbs2x_thresholds_linear[1] ? 0.0 : dvbs2x_modcod_speff[floor(Int,_dvbs2x_itp_snr(snr))]
 
