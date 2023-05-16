@@ -221,6 +221,9 @@ const ValidAngle = Union{UnitfulAngleQuantity, Real}
 # ╔═╡ 34b02d15-d9d0-4b34-a1ae-bb2183b8ef47
 const ValidDistance = Union{Unitful.Length, Real}
 
+# ╔═╡ 75bf2400-23c2-4a98-9a8b-2fe6f5b10271
+_validtype(t, A::Union{DataType, Union}) = eltype(t) isa A || all(x -> x isa A, t)
+
 # ╔═╡ c592d893-b693-4ba3-83de-49effcf2159f
 begin
 function to_radians(x::Real)
@@ -229,8 +232,7 @@ function to_radians(x::Real)
 end
 to_radians(x::UnitfulAngleQuantity) = uconvert(u"rad", x) |> ustrip
 function to_radians(x)
-	T = eltype(x)
-	if T <: ValidAngle
+	if _validtype(x, ValidAngle)
 		return map(to_radians, x)
 	else
 		error("You can only call `to_radians` with scalar angle values or iterables containing angle values")
@@ -243,8 +245,7 @@ begin
 to_degrees(x::Real) = x
 to_degrees(x::UnitfulAngleQuantity) = uconvert(u"°", x) |> ustrip
 function to_degrees(x)
-	T = eltype(x)
-	if T <: ValidAngle
+	if _validtype(x, ValidAngle)
 		return map(to_degrees, x)
 	else
 		error("You can only call `to_degrees` with scalar angle values or iterables containing angle values")
@@ -259,8 +260,7 @@ function to_meters(x::Real)
 end
 to_meters(x::Unitful.Length) = uconvert(u"m", x) |> ustrip
 function to_meters(x)
-	T = eltype(x)
-	if T <: ValidDistance
+	if _validtype(x, ValidDistance)
 		return map(to_meters, x)
 	else
 		error("You can only call `to_meters` with scalar length or iterables containing angle values")
@@ -1241,6 +1241,7 @@ version = "17.4.0+0"
 # ╟─1eb9b8de-fb9e-4d46-8217-78346eb2f44b
 # ╠═c7ff7ef2-0e7d-4d36-8463-9c046fd36999
 # ╠═34b02d15-d9d0-4b34-a1ae-bb2183b8ef47
+# ╠═75bf2400-23c2-4a98-9a8b-2fe6f5b10271
 # ╠═c592d893-b693-4ba3-83de-49effcf2159f
 # ╠═ed3cfb95-cacb-4cfa-af25-b03c22f1146f
 # ╠═9f437287-27a2-4e7d-b394-1a4eb2ee2825
