@@ -1,7 +1,7 @@
 import Unitful: °, km
 using Rotations
 import LinearAlgebra: normalize
-import TelecomUtils: earth_intersection, ExtraOutput
+import TelecomUtils: earth_intersection, ExtraOutput, to_radians
 using TelecomUtils
 using StaticArrays
 using Test
@@ -87,4 +87,40 @@ end
     uv2, r2 = lla2uv(target_lla, ExtraOutput())
     @test uv2 ≈ target_uv
     @test r2 ≈ r
+end
+
+# Add angle offset
+@testset "Add Angle Offset" begin
+    # Test adding having an offset on the same direction
+    θ_vec = range(10°, 80°; step=20°)
+    φ_vec = range(0°, 359°; step=30°)
+    function test_φ(x, y)
+        x̂ = rem2pi(to_radians(x), RoundNearest)
+        ŷ = rem2pi(to_radians(y), RoundNearest)
+        result = abs(x̂) ≈ abs(ŷ) ≈ π || Base.isapprox(x̂, ŷ; atol=1e-10, rtol=1e-5)
+        result || @info "Phi" x y x̂ ŷ Base.isapprox(x̂, ŷ; atol=1e-10, rtol=1e-5)
+        result
+    end
+    for θ in θ_vec
+        for φ in φ_vec
+            p_add = add_angle_offset((θ, φ), (5°, φ); input_type=:thetaphi, output_type=:thetaphi)
+            p_sub = add_angle_offset((θ, φ), (5°, φ + 180°); input_type=:thetaphi, output_type=:thetaphi)
+            @test p_add[1] ≈ θ + 5° && test_φ(p_add[2], φ)
+            @test p_sub[1] ≈ θ - 5° && test_φ(p_sub[2], φ)
+        end
+    end
+
+    # Test a perpendicular offset
+    for θ₁ in range(10°, 50°; step=20°)
+        for θ₂ in range(10°, 50°; step=20°)
+            for φ in range(0°, 270°; step=45°)
+                p = add_angle_offset((θ₁, φ - 45°), (θ₂, φ + 45°); input_type=:thetaphi, output_type=:thetaphi)
+                # Since they are perpendicular, we can  use the right spherical triangle rule (cosine law)
+                @test p[1] ≈ acos(cos(θ₁) * cos(θ₂))
+            end
+        end
+    end
+
+    # Test that pointing behind throws an error
+    @test_throws "behind the viewer" add_angle_offset((0.7, 0), (50°, 0))
 end
