@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.24
+# v0.19.25
 
 #> custom_attrs = ["hide-enabled"]
 
@@ -184,6 +184,90 @@ const UnitfulAngleType = Union{typeof(°),typeof(rad)}
 # ╔═╡ 64cf1b8b-6686-4eeb-a3cc-786300ea7c7d
 const UnitfulAngleQuantity = Quantity{<:Real,<:Any,<:UnitfulAngleType}
 
+# ╔═╡ ab2a30e0-f87b-4e65-8e56-78c283f3eb98
+function _check_radians_func(limit = π) 
+	f(x::Real) = abs(x) <= limit
+	f(x::UnitfulAngleQuantity) = true
+end
+
+# ╔═╡ a166e0d3-bb39-4183-8669-5cb7747007d3
+_check_radians(x; limit = π) = @assert all(_check_radians_func(limit), x) "Angles directly provided as numbers must be expressed in radians and satisfy -$limit ≤ x ≤ $limit
+Consider using `°` from Unitful (Also re-exported by TelecomUtils) if you want to pass numbers in degrees, by doing `x * °`." 
+
+# ╔═╡ 4c3585d9-5671-4658-a8e5-4900daf51aa4
+#=╠═╡
+let
+	x = rand(1000)
+	@benchmark _check_radians($x)
+end
+  ╠═╡ =#
+
+# ╔═╡ 8f31a1f3-fe78-4aad-ae1e-91d08f85960e
+#=╠═╡
+let
+	x = rand(1000) .* 10°
+	@benchmark _check_radians(Ref($x)[])
+end
+  ╠═╡ =#
+
+# ╔═╡ 1eb9b8de-fb9e-4d46-8217-78346eb2f44b
+md"""
+## Default Units
+"""
+
+# ╔═╡ c7ff7ef2-0e7d-4d36-8463-9c046fd36999
+const ValidAngle = Union{UnitfulAngleQuantity, Real}
+
+# ╔═╡ 34b02d15-d9d0-4b34-a1ae-bb2183b8ef47
+const ValidDistance = Union{Unitful.Length, Real}
+
+# ╔═╡ c592d893-b693-4ba3-83de-49effcf2159f
+begin
+function to_radians(x::Real)
+	_check_radians(x)
+	x
+end
+to_radians(x::UnitfulAngleQuantity) = uconvert(u"rad", x) |> ustrip
+function to_radians(x)
+	T = eltype(x)
+	if T <: ValidAngle
+		return map(to_radians, x)
+	else
+		error("You can only call `to_radians` with scalar angle values or iterables containing angle values")
+	end
+end
+end
+
+# ╔═╡ ed3cfb95-cacb-4cfa-af25-b03c22f1146f
+begin
+to_degrees(x::Real) = x
+to_degrees(x::UnitfulAngleQuantity) = uconvert(u"°", x) |> ustrip
+function to_degrees(x)
+	T = eltype(x)
+	if T <: ValidAngle
+		return map(to_degrees, x)
+	else
+		error("You can only call `to_degrees` with scalar angle values or iterables containing angle values")
+	end
+end
+end
+
+# ╔═╡ 9f437287-27a2-4e7d-b394-1a4eb2ee2825
+begin
+function to_meters(x::Real)
+	x
+end
+to_meters(x::Unitful.Length) = uconvert(u"m", x) |> ustrip
+function to_meters(x)
+	T = eltype(x)
+	if T <: ValidDistance
+		return map(to_meters, x)
+	else
+		error("You can only call `to_meters` with scalar length or iterables containing angle values")
+	end
+end
+end
+
 # ╔═╡ 1d023a0c-a93a-451c-a894-1d1f6a4b78a9
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -240,42 +324,25 @@ begin
 	
 	# Constructors
 	
-		ERA(el::Real,r::Real,az::Real)
-		ERA(el::UnitfulAngleQuantity,r::Real,az::Real)
-		ERA(el::UnitfulAngleQuantity,r::Real,az::UnitfulAngleQuantity)
-		ERA(el,r::Unitful.Length,az)
-	
-	where `UnitfulAngleQuantity` is a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
+		ERA(el::ValidAngle,r::ValidDistance,az::ValidAngle)
+
+	`ValidAngle` is a either a Real number or a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
+
+	`ValidDistance` is either a Real Number, or a subtype of `Unitful.Length`.
 	"""
 	@with_kw_noshow struct ERA <: SatViewCoordinate
 		el::Float64 # Elevation in radians
 		r::Float64 # Range in meters
 		az::Float64 # Azimuth in radians
 		
-		function ERA(el::Real,r::Real,az::Real)
+		function ERA(el::ValidAngle,r::ValidDistance,az::ValidAngle)
 			(isnan(el) || isnan(r) || isnan(az)) && return new(NaN,NaN,NaN)  
 			@assert el >= 0 && el <= π/2 "Elevation (and azimuth) should be provided in radians and between 0 and π/2.  If you wish to use degrees as inputs please multiply the first and last arguments by `°` (from Unitful.jl), which is re-exported by TelecomUtils and can be written with `\\degree<TAB>`"
-			@assert r >= 0 "Range must be positive"
-			new(el,r,rem2pi(az,RoundNearest))
+			r_m = to_meters(r)
+			@assert r_m >= 0 "Range must be positive"
+			new(to_radians(el),r_m,rem2pi(to_radians(az),RoundNearest))
 		end
 	end
-
-	# Define a constructor that takes combinations of real numbers and angles/lengths
-	ERA(el::UnitfulAngleQuantity,r::Real,az::Real) = ERA(
-		uconvert(u"rad",el) |> ustrip,
-		r,
-		az,
-	)
-	ERA(el::UnitfulAngleQuantity,r::Real,az::UnitfulAngleQuantity) = ERA(
-		el,
-		r,
-		uconvert(u"rad",az) |> ustrip,
-	)
-	ERA(el,r::Unitful.Length,az) = ERA(
-		el,
-		uconvert(u"m",r) |> ustrip,
-		az,
-	)
 	
 	# Show
 	function Base.show(io::IO,era::ERA)
@@ -285,6 +352,22 @@ begin
 		_print_angle(io,era.az,"az",true)
 		print(io,")")
 	end
+
+function Base.isapprox(x1::ERA, x2::ERA; angle_atol = deg2rad(1e-5), range_atol = 1e-3, atol = nothing, kwargs...)
+	@assert atol isa Nothing "You can't provide an absolute tolerance directly for comparison between `ERA` types, please use the independent kwargs `angle_atol` [radians] for the elevation/azimuth atol and `range_atol` [m] for the range one"
+
+	# Range, we use 1mm as default tolerance
+	Base.isapprox(x1.r,x2.r; atol = range_atol, kwargs...) || return false
+	
+	# Angles, we default to a default tolerance of 1e-5 degrees for isapprox
+	≈(x,y) = isapprox(x,y;atol = angle_atol, kwargs...)
+	≉(x,y) = !≈(x,y)
+	x1.el ≈ x2.el || return false
+	
+	# Don't care about different azimuth if elevation is 90°
+	x2.el ≉ π/2 && x1.az ≉ x2.az && return false
+	return true
+end
 end
 
 # ╔═╡ 39af2a26-e882-4596-846c-4699c1a0f3a2
@@ -321,43 +404,28 @@ begin
 	- `alt::Float64`: Altitude of the point above the reference earth ellipsoid [m].
 	
 	# Constructors
-		LLA(lat::Real,lon::Real,alt::Real)
-		LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real)
-		LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real)
-		LLA(lat,lon,alt::Unitful.Length)
-		LLA(lat,lon) # Defaults to 0.0 altitude
+		LLA(lat::ValidAngle,lon::ValidAngle,alt::ValidDistance)
+		LLA(lat::ValidAngle,lon::ValidAngle) # Defaults to 0m altitude
 	
-	where `UnitfulAngleQuantity` is a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
+	`ValidAngle` is a either a Real number or a `Unitful.Quantity` of unit either `u"rad"` or `u"°"`.
+
+	`ValidDistance` is either a Real Number, or a subtype of `Unitful.Length`.
 	"""
 	@with_kw_noshow struct LLA <: SatViewCoordinate
 		lat::Float64 # Latitude in radians
 		lon::Float64 # Longitude in radians
 		alt::Float64 # Altitude in meters
 		
-		function LLA(lat::Real,lon::Real,alt::Real)
+		function LLA(lat::ValidAngle,lon::ValidAngle,alt::ValidDistance)
 			(isnan(lat) || isnan(lon) || isnan(alt)) && return new(NaN,NaN,NaN)  
-			l2 = rem2pi(lon,RoundNearest)
+			lon_rad = rem2pi(to_radians(lon),RoundNearest)
 			@assert abs(lat) <= π/2 "Latitude should be given in radians and between -π/2 and π/2. If you wish to use degrees as inputs please multiply the first two arguments by `°` (from Unitful.jl), which is re-exported by TelecomUtils and can be written with `\\degree<TAB>`"
-			new(lat,l2,alt)
+			new(to_radians(lat),lon_rad,to_meters(alt))
 		end
 	end
 	
 	# Constructor without altitude, assume it is 0
 	LLA(lat,lon) = LLA(lat,lon,0.0)
-	
-	# Define a constructor that takes combinations of real numbers and angles/lengths
-	LLA(lat::UnitfulAngleQuantity,lon::Real,alt::Real) = LLA(
-		uconvert(u"rad",lat) |> ustrip,
-		lon,
-		alt)
-	LLA(lat::UnitfulAngleQuantity,lon::UnitfulAngleQuantity,alt::Real) = LLA(
-		lat,
-		uconvert(u"rad",lon) |> ustrip,
-		alt)
-	LLA(lat,lon,alt::Unitful.Length) = LLA(
-		lat,
-		lon,
-		uconvert(u"m",alt) |> ustrip)	
 end
 
 # ╔═╡ 3033d5c1-d8e0-4d46-0001-7dec4ff7afbd
@@ -382,23 +450,6 @@ function Base.isapprox(x1::LLA, x2::LLA; angle_atol = deg2rad(1e-5), alt_atol = 
 	# Return true if all the lat and lon are matching
 	x1.lat ≈ x2.lat && (x1.lon ≈ x2.lon || abs(x1.lon) ≈ abs(x2.lon) ≈ π) && return true
 	return false
-end
-
-# ╔═╡ 16782c72-ecb1-48ec-8510-78e2e0689a10
-function Base.isapprox(x1::ERA, x2::ERA; angle_atol = deg2rad(1e-5), range_atol = 1e-3, atol = nothing, kwargs...)
-	@assert atol isa Nothing "You can't provide an absolute tolerance directly for comparison between `ERA` types, please use the independent kwargs `angle_atol` [radians] for the elevation/azimuth atol and `range_atol` [m] for the range one"
-
-	# Range, we use 1mm as default tolerance
-	Base.isapprox(x1.r,x2.r; atol = range_atol, kwargs...) || return false
-	
-	# Angles, we default to a default tolerance of 1e-5 degrees for isapprox
-	≈(x,y) = isapprox(x,y;atol = angle_atol, kwargs...)
-	≉(x,y) = !≈(x,y)
-	x1.el ≈ x2.el || return false
-	
-	# Don't care about different azimuth if elevation is 90°
-	x2.el ≉ π/2 && x1.az ≉ x2.az && return false
-	return true
 end
 
 # ╔═╡ cbbff280-8ad7-4589-8dff-1d401f872233
@@ -604,9 +655,9 @@ Unitful = "~1.10.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-rc2"
+julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "bc02f942c90146412e88e996622f9470b9670e98"
+project_hash = "6d114ac95dd2810d72264a44c51ed45a82cf50a8"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1145,7 +1196,7 @@ version = "1.5.2+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.4.0+0"
+version = "5.7.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1183,6 +1234,16 @@ version = "17.4.0+0"
 # ╟─6a5cb372-60cb-4ffc-b4f0-22e4016104e7
 # ╠═e832c1b7-8c04-4146-90f6-1628e91fea2a
 # ╠═64cf1b8b-6686-4eeb-a3cc-786300ea7c7d
+# ╠═ab2a30e0-f87b-4e65-8e56-78c283f3eb98
+# ╠═a166e0d3-bb39-4183-8669-5cb7747007d3
+# ╠═4c3585d9-5671-4658-a8e5-4900daf51aa4
+# ╠═8f31a1f3-fe78-4aad-ae1e-91d08f85960e
+# ╟─1eb9b8de-fb9e-4d46-8217-78346eb2f44b
+# ╠═c7ff7ef2-0e7d-4d36-8463-9c046fd36999
+# ╠═34b02d15-d9d0-4b34-a1ae-bb2183b8ef47
+# ╠═c592d893-b693-4ba3-83de-49effcf2159f
+# ╠═ed3cfb95-cacb-4cfa-af25-b03c22f1146f
+# ╠═9f437287-27a2-4e7d-b394-1a4eb2ee2825
 # ╟─1d023a0c-a93a-451c-a894-1d1f6a4b78a9
 # ╠═b8ce87d4-4768-4e8a-a16e-9e68b00b6617
 # ╟─e3c221c6-6c4a-4b5f-93a6-30d3508ac9d2
@@ -1198,7 +1259,6 @@ version = "17.4.0+0"
 # ╟─f951805e-515a-475f-893f-bb8b968e425c
 # ╟─86ae20a9-e69c-4d63-9119-395449e9ac09
 # ╠═9be2fd5c-4b6c-4e13-b2aa-fb7120a504b7
-# ╠═16782c72-ecb1-48ec-8510-78e2e0689a10
 # ╠═39af2a26-e882-4596-846c-4699c1a0f3a2
 # ╠═4dc4e619-9d2e-45ea-9072-baef5680ef28
 # ╠═948e5814-60ca-4269-ae33-542b835b4116

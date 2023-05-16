@@ -1,10 +1,5 @@
-using TelecomUtils
-using Test
-using StaticArrays
+using SafeTestsets
 
-@testset verbose=true "TelecomUtils.jl" begin
-    Base.isnan(v::StaticArray) = any(isnan, v)
-    include("refview_basics.jl")
-    include("refview_transformations.jl")
-    include("refview_struct.jl")
-end
+@safetestset "RefView Basics" begin include("refview_basics.jl") end
+@safetestset "RefView Transformations" begin include("refview_transformations.jl") end
+@safetestset "RefView Struct" begin include("refview_struct.jl") end
