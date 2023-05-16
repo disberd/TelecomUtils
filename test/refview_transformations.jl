@@ -103,8 +103,8 @@ end
     end
     for θ in θ_vec
         for φ in φ_vec
-            p_add = add_angle_offset((θ, φ), (5°, φ); input_type=:thetaphi, output_type=:thetaphi)
-            p_sub = add_angle_offset((θ, φ), (5°, φ + 180°); input_type=:thetaphi, output_type=:thetaphi)
+            p_add = add_angular_offset((θ, φ), (5°, φ); input_type=:thetaphi, output_type=:thetaphi)
+            p_sub = add_angular_offset((θ, φ), (5°, φ + 180°); input_type=:thetaphi, output_type=:thetaphi)
             @test p_add[1] ≈ θ + 5° && test_φ(p_add[2], φ)
             @test p_sub[1] ≈ θ - 5° && test_φ(p_sub[2], φ)
         end
@@ -114,7 +114,7 @@ end
     for θ₁ in range(10°, 50°; step=20°)
         for θ₂ in range(10°, 50°; step=20°)
             for φ in range(0°, 270°; step=45°)
-                p = add_angle_offset((θ₁, φ - 45°), (θ₂, φ + 45°); input_type=:thetaphi, output_type=:thetaphi)
+                p = add_angular_offset((θ₁, φ - 45°), (θ₂, φ + 45°); input_type=:thetaphi, output_type=:thetaphi)
                 # Since they are perpendicular, we can  use the right spherical triangle rule (cosine law)
                 @test p[1] ≈ acos(cos(θ₁) * cos(θ₂))
             end
@@ -122,5 +122,5 @@ end
     end
 
     # Test that pointing behind throws an error
-    @test_throws "behind the viewer" add_angle_offset((0.7, 0), (50°, 0))
+    @test_throws "behind the viewer" add_angular_offset((0.7, 0), (50°, 0))
 end

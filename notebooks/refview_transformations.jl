@@ -475,7 +475,7 @@ end
 
 # ╔═╡ 017d2193-9a59-4186-b897-04232d61e02a
 md"""
-## Add Angle Offset
+## Add Angular Offset
 """
 
 # ╔═╡ f52f8229-4320-4b17-ab8c-cfc430d4fa1b
@@ -536,8 +536,8 @@ end
 # ╔═╡ b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
 begin
 """
-	p = add_angle_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
-	p = add_angle_offset(p₀, θ::ValidAngle, φ::ValidAngle = 0.0; kwargs...)
+	p = add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	p = add_angular_offset(p₀, θ::ValidAngle, φ::ValidAngle = 0.0; kwargs...)
 
 Compute the resulting pointing direction `p` obtained by adding an angular offset
 specified by angles θ, φ (following the ISO/Phisics convention for spherical
@@ -556,14 +556,16 @@ of the `output_type` kwarg.
 The offset angles can be provided either as 2nd and 3rd argument to the function
 (2nd method) or as an iterable containing θ and φ as first and second element
 respectively (1st method).
+
+See also: [`get_angular_offset`](@ref)
 """
-function add_angle_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+function add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
 	θ, φ = to_radians(offset_angles)
 	sθ, cθ = sincos(θ)
 	sφ, cφ = sincos(φ)
 	
 	θφ_in = if input_type ∈ (:ThetaPhi, :thetaphi, :θφ)
-		p₀
+		to_radians(p₀)
 	else
 		ThetaPhifromUV()(p₀)
 	end
@@ -580,22 +582,27 @@ function add_angle_offset(p₀, offset_angles; input_type = :UV, output_type = :
 end
 
 # Version with separate angles
-add_angle_offset(p₀,θ::ValidAngle, φ::ValidAngle = 0; kwargs...) = add_angle_offset(p₀, (θ, φ); kwargs...)
+add_angular_offset(p₀,θ::ValidAngle, φ::ValidAngle = 0; kwargs...) = add_angular_offset(p₀, (θ, φ); kwargs...)
 end
 
 # ╔═╡ 3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
 #=╠═╡
-@benchmark add_angle_offset((0.5,0), (10°, 0))
+@benchmark add_angular_offset((0.5,0), (10°, 0))
   ╠═╡ =#
 
 # ╔═╡ 7bf3168c-7be0-4bb8-98cc-7a4cab893463
 #=╠═╡
 let
 	u = rand(1000).* .5
-	f(x) = add_angle_offset((x,0), (10°, 0); output_type = :thetaphi)
+	f(x) = add_angular_offset((x,0), (10°, 0); output_type = :thetaphi)
 	@benchmark map($f, $u)
 end
   ╠═╡ =#
+
+# ╔═╡ 80395e68-85be-42f5-ac6a-b7719b957da3
+md"""
+## Get Angular Offset
+"""
 
 # ╔═╡ ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╠═╡ skip_as_script = true
@@ -1005,8 +1012,36 @@ end
 begin
 	export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
 	export compute_sat_position
-	export add_angle_offset
+	export add_angular_offset
 end
+
+# ╔═╡ afe59330-5f20-43a7-8ed5-a9113602e3bc
+function get_angular_offset(p₁, p₂; input_type = :UV, output_type = :thetaphi)
+	uv2tp = ThetaPhifromUV()
+	tp2uv = inv(uv2tp)
+	uv, θφ = if input_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+		tp = to_radians((p₀, p₁))
+		uv = tp2uv.(tp)
+		uv, tp
+	else
+		uv = (p₁, p₂)
+		tp = uv2tp.(uv)
+		uv, tp
+	end
+	
+	R = angle_offset_rotation(θφ[1]) # We take p₁ as reference
+	p₂_xyz = XYZfromUV()(uv[2], 1) # We create the 3D vector corresponding to p₂
+	perturbation = R' * p₂_xyz
+	u, v, _ = perturbation
+	out = if output_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+		uv2tp(u,v)
+	else
+		SVector{2, Float64}(u,v)
+	end
+end
+
+# ╔═╡ 1b5241eb-c2ed-482f-9a99-f9c951a5e853
+get_angular_offset((.3,0),(.4,0); output_type = :UV)
 
 # ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
 md"""
@@ -1521,7 +1556,10 @@ version = "17.4.0+0"
 # ╠═b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
 # ╠═3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
 # ╠═7bf3168c-7be0-4bb8-98cc-7a4cab893463
-# ╠═ee3aa19f-317e-46f6-8da2-4792a84b7839
+# ╟─80395e68-85be-42f5-ac6a-b7719b957da3
+# ╠═afe59330-5f20-43a7-8ed5-a9113602e3bc
+# ╠═1b5241eb-c2ed-482f-9a99-f9c951a5e853
+# ╟─ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╟─1c9a8798-0b03-4e50-952e-e615192dbd45
 # ╠═2e07bdfa-7393-4864-be2f-35b7843f6cc8
 # ╠═e7a73ba7-731d-4a58-ac39-6fdebff78d7f
