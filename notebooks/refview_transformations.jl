@@ -64,7 +64,7 @@ initialize_eqref()
 # ╠═╡ skip_as_script = true
 #=╠═╡
 md"""
-## Load previous notebook
+# Load previous notebook
 """
   ╠═╡ =#
 
@@ -318,19 +318,23 @@ struct ThetaPhifromUV <: CoordinateTransformations.Transformation end
 Base.inv(::UVfromThetaPhi) = ThetaPhifromUV()
 Base.inv(::ThetaPhifromUV) = UVfromThetaPhi()
 	
-function (::ThetaPhifromUV)(uv::StaticVector{2,T}) where T
+function (::ThetaPhifromUV)(uv)
 	u,v = uv
 	# We use the ISO Physics convention, so θ is the polar angle
-	θ = asin(norm(uv))
+	θ = asin(sqrt(u^2 + v^2))
 	# φ is the angle from the U (W in WND) axis going towards V (N in WND)
 	φ = atan(v,u)
 	return SVector(θ,φ)
 end
-function (::UVfromThetaPhi)(θφ::StaticVector{2,T}) where T
+(t::ThetaPhifromUV)(u,v) = t((u,v))
+
+function (::UVfromThetaPhi)(θφ)
+	_check_radians(θφ)
 	θ,φ = θφ
 	v, u = sin(θ) .* sincos(φ)
 	return SVector(u,v)
 end
+(t::UVfromThetaPhi)(θ,φ) = t((θ,φ))
 end
 
 # ╔═╡ 42c1d4da-2ac8-4b44-92af-8c5f0a3958e9
@@ -466,6 +470,130 @@ end
 let
 	uv = (0,0)
 	XYZfromUV()(uv, 100)
+end
+  ╠═╡ =#
+
+# ╔═╡ 017d2193-9a59-4186-b897-04232d61e02a
+md"""
+## Add Angle Offset
+"""
+
+# ╔═╡ f52f8229-4320-4b17-ab8c-cfc430d4fa1b
+begin
+# Compute the rotation matrix to find offset points following the procedure in
+# this stackexchnge answer:
+# https://math.stackexchange.com/questions/4343044/rotate-vector-by-a-random-little-amount
+function angle_offset_rotation(θ, φ)
+	# Precompute the sines and cosines
+	sθ, cθ = sincos(θ)
+	sφ, cφ = sincos(φ)
+	
+	# Compute the versors of the spherical to cartesian transformation as per
+	# [Wikipedia](https://en.wikipedia.org/wiki/Spherical_coordinate_system#Integration_and_differentiation_in_spherical_coordinates)
+	r̂ = SA_F64[sθ*cφ, sθ*sφ, cθ]
+	θ̂ = SA_F64[cθ*cφ, cθ*sφ, -sθ]
+	φ̂ = SA_F64[-sφ, cφ, 0]
+
+	# The standard basis for spherical coordinates is r̂, θ̂, φ̂. We instead
+	# want a basis that has r̂ as third vector (e.g. ẑ in normal cartesian
+	# coordinates), and we want to rotate the other two vectors in a way that
+	# the second vector is pointing towards Positive ŷ (i.e. similar to how ENU
+	# has the second direction pointing towards North). 
+	# To achieve this, we have to reorder the versor and then perform a matrix
+	# rotation around the new third axis (which is r̂) by an angle that depends
+	# on φ.
+	# See
+	# ![image](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Kugelkoord-lokale-Basis-s.svg/360px-Kugelkoord-lokale-Basis-s.svg.png)
+	# for a reference figure of the original spherical versors.
+	_R = hcat(-φ̂, θ̂, r̂) # φ̂ has to change sign to maintain the right-rule axis order
+	# We have to create a rotation matrix around Z that is equivalent to π/2 - φ
+
+	# We use the RotZ Matrix definition in
+	# https://en.wikipedia.org/wiki/Rotation_matrix#Basic_rotations, but
+	# remembering that: 
+	# cos(π/2 - φ) = sin(φ)
+	# sin(π/2 - φ) = cos(φ)
+	__R = SA_F64[
+		sφ -cφ 0
+		cφ sφ 0
+		0 0 1
+	]
+
+	# return __R, _R, __R*_R, _R*__R
+	return _R*__R
+end
+angle_offset_rotation(θφ) = angle_offset_rotation(θφ...)
+end
+
+# ╔═╡ 1a723bf6-686c-4c05-a876-463010285757
+#=╠═╡
+let
+	x = (30°, 90°)
+	@benchmark angle_offset_rotation($x)
+end
+  ╠═╡ =#
+
+# ╔═╡ b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+begin
+"""
+	p = add_angle_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	p = add_angle_offset(p₀, θ::ValidAngle, φ::ValidAngle = 0.0; kwargs...)
+
+Compute the resulting pointing direction `p` obtained by adding an angular offset
+specified by angles θ, φ (following the ISO/Phisics convention for spherical
+coordinates) [rad] to the starting position identified by p₀.
+
+The input starting position `p₀` can be specified as any iterable of 2 elements
+and is interpreted (depending on the value of the `input_type` kwarg) as a set
+of 2D coordinates specified either as U-V or Theta-Phi [rad]. 
+The starting point is interpreted as Theta-Phi if `input_type in (:ThetaPhi,
+:thetaphi, :θφ)`
+
+The output pointing `p` is always provided as a `SVector{2, Float64}` and similarly
+to `p₀` can be given as either UV or ThetaPhi coordinates depending on the value
+of the `output_type` kwarg.
+
+The offset angles can be provided either as 2nd and 3rd argument to the function
+(2nd method) or as an iterable containing θ and φ as first and second element
+respectively (1st method).
+"""
+function add_angle_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	θ, φ = to_radians(offset_angles)
+	sθ, cθ = sincos(θ)
+	sφ, cφ = sincos(φ)
+	
+	θφ_in = if input_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+		p₀
+	else
+		ThetaPhifromUV()(p₀)
+	end
+	R = angle_offset_rotation(θφ_in)
+	perturbation = SA_F64[sθ*cφ, sθ*sφ, cθ]
+	p3_out = R * perturbation
+	u,v,w = p3_out
+	@assert w >= 0 "The resulting point has a θ > π/2, so it is located behind the viewer"
+	out = if output_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+		ThetaPhifromUV()(u,v)
+	else
+		SVector{2,Float64}(u,v)
+	end
+end
+
+# Version with separate angles
+add_angle_offset(p₀,θ::ValidAngle, φ::ValidAngle = 0; kwargs...) = add_angle_offset(p₀, (θ, φ); kwargs...)
+end
+
+# ╔═╡ 3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
+#=╠═╡
+@benchmark add_angle_offset((0.5,0), (10°, 0))
+  ╠═╡ =#
+
+# ╔═╡ 7bf3168c-7be0-4bb8-98cc-7a4cab893463
+#=╠═╡
+let
+	u = rand(1000).* .5
+	f(x) = add_angle_offset((x,0), (10°, 0); output_type = :thetaphi)
+	@benchmark map($f, $u)
 end
   ╠═╡ =#
 
@@ -877,6 +1005,7 @@ end
 begin
 	export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
 	export compute_sat_position
+	export add_angle_offset
 end
 
 # ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
@@ -1386,6 +1515,12 @@ version = "17.4.0+0"
 # ╠═31089d3a-e122-4f4a-bf6a-33bd6a7bff3f
 # ╠═1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
 # ╠═88ba47dd-5845-4c36-83bc-d02c3cabcd63
+# ╟─017d2193-9a59-4186-b897-04232d61e02a
+# ╠═f52f8229-4320-4b17-ab8c-cfc430d4fa1b
+# ╠═1a723bf6-686c-4c05-a876-463010285757
+# ╠═b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+# ╠═3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
+# ╠═7bf3168c-7be0-4bb8-98cc-7a4cab893463
 # ╠═ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╟─1c9a8798-0b03-4e50-952e-e615192dbd45
 # ╠═2e07bdfa-7393-4864-be2f-35b7843f6cc8

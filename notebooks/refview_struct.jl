@@ -578,9 +578,13 @@ begin
 	get_pointing(rv::ReferenceView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; pointing_type::Symbol=:uv, face = rv.face, R=nothing)
 Provide the 2-D angular pointing at which the target point (specified as LLA, ECEF or as another `ReferenceView`) is seen from the ReferenceView object `rv`.
 
-`pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
+`pointing_type` is used to select whether the output should be given in UV or
+ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if
+`pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
-When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
+function also returns the coordinated of the identified point in the local CRS
+of `rv`.
 
 For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
 
