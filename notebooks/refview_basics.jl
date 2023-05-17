@@ -210,6 +210,27 @@ let
 end
   ╠═╡ =#
 
+# ╔═╡ 4d276ecd-2df3-4268-bc99-d80e7d84a82a
+md"""
+# Pointing Types
+"""
+
+# ╔═╡ 64b133a9-5cf6-4c1e-92b8-9fade1a3bd04
+begin
+	abstract type PointingType end
+	struct UV <: PointingType end
+	struct ThetaPhi <: PointingType end
+	const _uv_names = (:UV, :uv)
+	const _tp_names = (:ThetaPhi, :θφ, :thetaphi)
+	function PointingType(s::Symbol)
+		s ∈ _tp_names && return ThetaPhi()
+		s ∈ _uv_names && return UV()
+		error("$s is not a supported name for a PointingType. Use one of the following:
+		- x in $(_uv_names) for UV
+		- x in $(_tp_names) for ThetaPhi")
+	end
+end
+
 # ╔═╡ 1eb9b8de-fb9e-4d46-8217-78346eb2f44b
 md"""
 ## Default Units
@@ -1238,6 +1259,8 @@ version = "17.4.0+0"
 # ╠═a166e0d3-bb39-4183-8669-5cb7747007d3
 # ╠═4c3585d9-5671-4658-a8e5-4900daf51aa4
 # ╠═8f31a1f3-fe78-4aad-ae1e-91d08f85960e
+# ╟─4d276ecd-2df3-4268-bc99-d80e7d84a82a
+# ╠═64b133a9-5cf6-4c1e-92b8-9fade1a3bd04
 # ╟─1eb9b8de-fb9e-4d46-8217-78346eb2f44b
 # ╠═c7ff7ef2-0e7d-4d36-8463-9c046fd36999
 # ╠═34b02d15-d9d0-4b34-a1ae-bb2183b8ef47

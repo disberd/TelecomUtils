@@ -533,38 +533,14 @@ let
 end
   ╠═╡ =#
 
-# ╔═╡ b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+# ╔═╡ b79949d3-de02-4608-8248-89ad72e85fb9
 begin
-"""
-	p = add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
-	p = add_angular_offset(p₀, θ::ValidAngle, φ::ValidAngle = 0.0; kwargs...)
-
-Compute the resulting pointing direction `p` obtained by adding an angular offset
-specified by angles θ, φ (following the ISO/Phisics convention for spherical
-coordinates) [rad] to the starting position identified by p₀.
-
-The input starting position `p₀` can be specified as any iterable of 2 elements
-and is interpreted (depending on the value of the `input_type` kwarg) as a set
-of 2D coordinates specified either as U-V or Theta-Phi [rad]. 
-The starting point is interpreted as Theta-Phi if `input_type in (:ThetaPhi,
-:thetaphi, :θφ)`
-
-The output pointing `p` is always provided as a `SVector{2, Float64}` and similarly
-to `p₀` can be given as either UV or ThetaPhi coordinates depending on the value
-of the `output_type` kwarg.
-
-The offset angles can be provided either as 2nd and 3rd argument to the function
-(2nd method) or as an iterable containing θ and φ as first and second element
-respectively (1st method).
-
-See also: [`get_angular_offset`](@ref)
-"""
-function add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+function _add_angular_offset(p₀, offset_angles, input_type::PointingType, output_type::PointingType)
 	θ, φ = to_radians(offset_angles)
 	sθ, cθ = sincos(θ)
 	sφ, cφ = sincos(φ)
 	
-	θφ_in = if input_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+	θφ_in = if input_type isa ThetaPhi
 		to_radians(p₀)
 	else
 		ThetaPhifromUV()(p₀)
@@ -574,11 +550,53 @@ function add_angular_offset(p₀, offset_angles; input_type = :UV, output_type =
 	p3_out = R * perturbation
 	u,v,w = p3_out
 	@assert w >= 0 "The resulting point has a θ > π/2, so it is located behind the viewer"
-	out = if output_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+	out = if output_type isa ThetaPhi
 		ThetaPhifromUV()(u,v)
 	else
 		SVector{2,Float64}(u,v)
 	end
+end
+end
+
+# ╔═╡ b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+begin
+"""
+	p = add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	p = add_angular_offset(p₀, θ::ValidAngle, φ::ValidAngle = 0.0; input_type = :UV, output_type = :UV)
+
+Compute the resulting pointing direction `p` obtained by adding an angular offset
+specified by angles θ, φ (following the ISO/Physics convention for spherical
+coordinates) [rad] to the starting position identified by p₀.
+
+The input starting position `p₀` can be specified as any iterable of 2 elements
+and is interpreted (depending on the value of the `input_type` kwarg) as a set
+of 2D coordinates specified either as U-V or Theta-Phi [rad]. 
+
+The output pointing `p` is always provided as a `SVector{2, Float64}` and similarly
+to `p₀` can be given as either UV or ThetaPhi coordinates depending on the value
+of the `output_type` kwarg.
+
+For both `input_type` and `output_type`, the following Symbols are supported:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+The offset angles can be provided either as 2nd and 3rd argument to the function
+(2nd method) or as an iterable containing θ and φ as first and second element
+respectively (1st method).
+
+This function performs the inverse operation of [`get_angular_offset`](@ref) so the following code should return true
+```julia
+uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+p = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+all(p .≈ uv2)
+```
+
+See also: [`get_angular_offset`](@ref), [`get_angular_distance`](@ref)
+"""
+function add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	_add_angular_offset(p₀, offset_angles, PointingType(input_type), PointingType(output_type))
 end
 
 # Version with separate angles
@@ -603,6 +621,70 @@ end
 md"""
 ## Get Angular Offset
 """
+
+# ╔═╡ 75d0a1c9-2535-4dcf-ae78-311aa2d76a80
+function _get_angular_distance(p₁, p₂, input_type::PointingType, output_type::PointingType)
+	if input_type isa UV && output_type isa UV
+		Δu = p₂[1] - p₁[1]
+		Δv = p₂[2] - p₁[2]
+		return sqrt(Δu^2 + Δv^2)
+	end
+	uv₂, uv₁ = if input_type isa ThetaPhi
+		tp2uv = UVfromThetaPhi()
+		@. tp2uv(to_radians((p₁, p₂)))
+	else
+		SVector{2,Float64}.((p₁, p₂))
+	end
+	if output_type isa UV
+		return norm(uv₂ - uv₁)
+	end
+	uv2xyz = XYZfromUV()
+	p₁_xyz = uv2xyz(uv₁,1)
+	p₂_xyz = uv2xyz(uv₂,1)
+	return acos(p₁_xyz'p₂_xyz)
+end
+
+# ╔═╡ 61738518-f090-4551-88b4-0e36298d93f9
+"""
+	get_angular_distance(p₁, p₂; input_type=:UV, output_type=:thetaphi)
+
+Compute the angular distance between the target pointing direction `p₂` and the starting pointing direction `p₁`. The two target pointings can be intepreted as either UV or ThetaPhi coordinates depending on the value of the `input_type` kwarg.
+
+The output is a scalar that depending on the value of the `output_type` kwarg represents either the distance in UV, or the angular distance (Δθ) between `p₂` and `p₁`.
+
+For both `input_type` and `output_type`, the following Symbols are supported:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+## Note
+All input angles are intepreted as radians unless specified as a Quantity in degrees using `°` from Unitful.
+
+The output angles (when `output_type` is ThetaPhi) are also expressed in radians
+
+This function is similar to [`get_angular_offset`](@ref) but has a slightly faster implementation in case only the distance is required, rather than the full 2D offset.
+The following code should evaluate to true
+```julia
+uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+Δθ = get_angular_distance(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+offset[1] ≈ Δθ
+```
+
+See also: [`add_angular_offset`](@ref), [`get_angular_offset`](@ref)
+"""
+function get_angular_distance(p₁, p₂; input_type = :UV, output_type = :thetaphi)
+	_get_angular_distance(p₁, p₂, PointingType(input_type), PointingType(output_type))
+end
+
+# ╔═╡ 85d67f04-169d-43de-ade1-b163169aff74
+#=╠═╡
+let
+	x = rand(1000)
+	f(x) = get_angular_distance((x,0),(.4,0); input_type = :thetaphi, output_type = :thetaphi)
+	@benchmark map($f, $x)
+end
+  ╠═╡ =#
 
 # ╔═╡ ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╠═╡ skip_as_script = true
@@ -1008,19 +1090,17 @@ begin
 	(trans::UVfromLLA)(tup::Tuple{<:Number, <:Number, <:Number},args...) = trans(LLA(tup...),args...)
 end
 
-# ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
-begin
-	export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
-	export compute_sat_position
-	export add_angular_offset
-end
-
-# ╔═╡ afe59330-5f20-43a7-8ed5-a9113602e3bc
-function get_angular_offset(p₁, p₂; input_type = :UV, output_type = :thetaphi)
+# ╔═╡ 0194ef46-0946-41a4-8909-e3e08328b4b6
+function _get_angular_offset(p₁, p₂, input_type::PointingType, output_type::PointingType)
+	if input_type isa UV && output_type isa UV
+		Δu = p₂[1] - p₁[1]
+		Δv = p₂[2] - p₁[2]
+		return SVector{2, Float64}(Δu, Δv)
+	end
 	uv2tp = ThetaPhifromUV()
 	tp2uv = inv(uv2tp)
-	uv, θφ = if input_type ∈ (:ThetaPhi, :thetaphi, :θφ)
-		tp = to_radians((p₀, p₁))
+	uv, θφ = if input_type isa ThetaPhi
+		tp = to_radians.((p₁, p₂))
 		uv = tp2uv.(tp)
 		uv, tp
 	else
@@ -1028,20 +1108,96 @@ function get_angular_offset(p₁, p₂; input_type = :UV, output_type = :thetaph
 		tp = uv2tp.(uv)
 		uv, tp
 	end
+	if output_type isa UV
+		Δu = uv[2][1] - uv[1][1]
+		Δv = uv[2][2] - uv[1][2]
+		return SVector{2, Float64}(Δu, Δv)
+	end
+		
 	
 	R = angle_offset_rotation(θφ[1]) # We take p₁ as reference
 	p₂_xyz = XYZfromUV()(uv[2], 1) # We create the 3D vector corresponding to p₂
 	perturbation = R' * p₂_xyz
 	u, v, _ = perturbation
-	out = if output_type ∈ (:ThetaPhi, :thetaphi, :θφ)
-		uv2tp(u,v)
-	else
-		SVector{2, Float64}(u,v)
-	end
+	return uv2tp(u,v)
 end
 
+# ╔═╡ afe59330-5f20-43a7-8ed5-a9113602e3bc
+"""
+	get_angular_offset(p₁, p₂; input_type=:UV, output_type=:thetaphi)
+Compute the angular offset required to reach the target pointing direction `p₂` from starting pointing direction `p₁`. The two target pointings can be intepreted as either UV or ThetaPhi coordinates depending on the value of the `input_type` kwarg.
+
+The output is provided as an SVector{2,Float64} and depending on the value of the `output_type` kwarg it represents either the Δu, Δv offset in UV, or the angular offset (θ and φ) required to reach `p₂` from `p₁`.
+
+For both `input_type` and `output_type`, the following Symbols are supported:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+## Note
+All input angles are intepreted as radians unless specified as a Quantity in degrees using `°` from Unitful.
+
+The output angles (when `output_type` is ThetaPhi) are also expressed in radians
+
+This function performs the inverse operation of [`add_angular_offset`](@ref) so the following code should return true
+```julia
+uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+p = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+all(p .≈ uv2)
+```
+
+Check out [`get_angular_distance`](@ref) for a slightly faster implementation in case you only require the angular distance rather than the 2D offset.
+
+See also: [`add_angular_offset`](@ref), [`get_angular_distance`](@ref)
+"""
+function get_angular_offset(p₁, p₂; input_type = :UV, output_type = :thetaphi)
+	_get_angular_offset(p₁, p₂, PointingType(input_type), PointingType(output_type))
+end
+
+# ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
+begin
+	export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
+	export compute_sat_position
+	export add_angular_offset, get_angular_offset, get_angular_distance
+end
+
+# ╔═╡ f2510c0d-56f3-41be-8617-a4cb81e9aba8
+#=╠═╡
+let
+	uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+D = get_angular_distance(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+p = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+@test all(p .≈ uv2) && offset[1] ≈ D
+end
+  ╠═╡ =#
+
 # ╔═╡ 1b5241eb-c2ed-482f-9a99-f9c951a5e853
-get_angular_offset((.3,0),(.4,0); output_type = :UV)
+#=╠═╡
+let
+	x = rand(1000)
+	f(x) = get_angular_offset((x,0),(.4,0); input_type = :thetaphi, output_type = :thetaphi)
+	@benchmark map($f, $x)
+end
+  ╠═╡ =#
+
+# ╔═╡ 3700617d-e48f-49df-a41a-d49fabf1c52e
+#=╠═╡
+let
+	uv2tp = ThetaPhifromUV()
+	uv1 = (.4,0)
+	uv2 = (.3,.5)
+	tp1 = uv2tp(uv1)
+	tp2 = uv2tp(uv2)
+	input_type = :uv
+	output_type = :thetaphi
+	dist = get_angular_distance(uv1, uv2; input_type, output_type)
+	offset = get_angular_offset(uv1,uv2; input_type, output_type)
+	@test dist ≈ offset[1]
+end
+  ╠═╡ =#
 
 # ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
 md"""
@@ -1554,11 +1710,18 @@ version = "17.4.0+0"
 # ╠═f52f8229-4320-4b17-ab8c-cfc430d4fa1b
 # ╠═1a723bf6-686c-4c05-a876-463010285757
 # ╠═b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+# ╠═b79949d3-de02-4608-8248-89ad72e85fb9
 # ╠═3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
 # ╠═7bf3168c-7be0-4bb8-98cc-7a4cab893463
 # ╟─80395e68-85be-42f5-ac6a-b7719b957da3
 # ╠═afe59330-5f20-43a7-8ed5-a9113602e3bc
+# ╠═f2510c0d-56f3-41be-8617-a4cb81e9aba8
+# ╠═0194ef46-0946-41a4-8909-e3e08328b4b6
 # ╠═1b5241eb-c2ed-482f-9a99-f9c951a5e853
+# ╠═85d67f04-169d-43de-ade1-b163169aff74
+# ╠═61738518-f090-4551-88b4-0e36298d93f9
+# ╠═75d0a1c9-2535-4dcf-ae78-311aa2d76a80
+# ╠═3700617d-e48f-49df-a41a-d49fabf1c52e
 # ╟─ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╟─1c9a8798-0b03-4e50-952e-e615192dbd45
 # ╠═2e07bdfa-7393-4864-be2f-35b7843f6cc8
