@@ -102,25 +102,59 @@ end
         result
     end
     for θ in θ_vec
-        for φ in φ_vec
+        @test_nowarn for φ in φ_vec
             p_add = add_angular_offset((θ, φ), (5°, φ); input_type=:thetaphi, output_type=:thetaphi)
             p_sub = add_angular_offset((θ, φ), (5°, φ + 180°); input_type=:thetaphi, output_type=:thetaphi)
-            @test p_add[1] ≈ θ + 5° && test_φ(p_add[2], φ)
-            @test p_sub[1] ≈ θ - 5° && test_φ(p_sub[2], φ)
+            (p_add[1] ≈ θ + 5° && test_φ(p_add[2], φ)) || error("The add with $((;θ, φ)) is not matching")
+            (p_sub[1] ≈ θ - 5° && test_φ(p_sub[2], φ))  || error("The subtraction with $((;θ, φ)) is not matching")
         end
     end
 
     # Test a perpendicular offset
     for θ₁ in range(10°, 50°; step=20°)
-        for θ₂ in range(10°, 50°; step=20°)
+        @test_nowarn for θ₂ in range(10°, 50°; step=20°)
             for φ in range(0°, 270°; step=45°)
                 p = add_angular_offset((θ₁, φ - 45°), (θ₂, φ + 45°); input_type=:thetaphi, output_type=:thetaphi)
                 # Since they are perpendicular, we can  use the right spherical triangle rule (cosine law)
-                @test p[1] ≈ acos(cos(θ₁) * cos(θ₂))
+                p[1] ≈ acos(cos(θ₁) * cos(θ₂)) || error("The perpendicular offset addition with $((;θ₁, θ₂, φ))")
             end
         end
     end
 
     # Test that pointing behind throws an error
     @test_throws "behind the viewer" add_angular_offset((0.7, 0), (50°, 0))
+
+    todeg(x) = @. rad2deg(x) * °
+
+    # Test the match between forward and reverse angular offset
+    @test_nowarn for i in 1:100
+        uv1 = SVector{2}(rand(2) .- .5)
+        uv2 = SVector{2}(rand(2) .- .5)
+        offset = get_angular_offset(uv1, uv2; input_type=:uv, output_type=:thetaphi)
+        uv_target = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+        uv_target ≈ uv2 || error("The forward-reverse offset test failed with $((;uv1, uv2))")
+    end
+    @test_nowarn for i in 1:100
+        tp1 = SVector{2}(rand()*50°, (rand()-.5)*360°)
+        tp2 = SVector{2}(rand()*50°, (rand()-.5)*360°)
+        offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi) |> todeg
+        tp_target = add_angular_offset(tp1, offset; input_type = :thetaphi, output_type = :thetaphi) |> todeg
+        (tp_target[1] ≈ tp2[1] && test_φ(tp_target[2], tp2[2])) || error("The forward-reverse offset test with angles failed with $((;tp1, tp2, tp_target))")
+    end
+
+    # Test the match within the extracted angular distance
+    @test_nowarn for i in 1:100
+        uv1 = SVector{2}(rand(2) .- .5)
+        uv2 = SVector{2}(rand(2) .- .5)
+        offset = get_angular_offset(uv1, uv2; input_type=:uv, output_type=:thetaphi)
+        dist = get_angular_distance(uv1, uv2; input_type=:uv, output_type=:thetaphi)
+        offset[1] ≈ dist || error("The distance-offset test in UV failed with $((;uv1, uv2, dist, offset))")
+    end
+    # @test_nowarn for i in 1:100
+    #     tp1 = SVector{2}(rand()*50°, (rand()-.5)*360°)
+    #     tp2 = SVector{2}(rand()*50°, (rand()-.5)*360°)
+    #     offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi)
+    #     dist = get_angular_distance(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi)
+    #     offset[1] ≈ dist || error("The distance-offset test in ThetaPhi failed with $((;tp1, tp2, dist, offset))")
+    # end
 end
