@@ -113,6 +113,52 @@ face_rotation(face) = face_rotation(to_face(face))
 @benchmark Ref(face_rotation(:NegativeX))[]
   ╠═╡ =#
 
+# ╔═╡ f4c3876a-a81b-42f3-870a-43526e4c116e
+md"""
+## boresight versor
+"""
+
+# ╔═╡ cc51ab70-0167-477f-a62d-88567e94fed9
+begin
+	function boresight_versor(face::Faces)
+		face === PositiveZ && return SA_F64[0,0,1]
+		face === NegativeZ && return SA_F64[0,0,-1]
+		face === PositiveX && return SA_F64[1,0,0]
+		face === NegativeX && return SA_F64[-1,0,0]
+		face === PositiveY && return SA_F64[0,1,0]
+		face === NegativeY && return SA_F64[0,-1,0]
+	end
+	boresight_versor(face) = boresight_versor(to_face(face))
+
+	# convert SVectors and NTuple
+	boresight_versor(s::Union{SVector{3}, NTuple{3, <:Number}}) = SVector{3, Float64}(s) |> normalize
+	# Handle normal vectors
+	function boresight_versor(v::AbstractVector{<:Number})
+		@assert length(v) == 3 "Only Vectors with exactly three elements are supported for specifying the boresight versor. Consider using Tuples or SVector from StaticArrays"
+		# Revert to SVector method
+		boresight_versor(SVector{3, Float64}(v))
+	end
+	boresight_versor(x,y,z) = boresight_versor(SVector{3, Float64}(x,y,z))
+end
+
+# ╔═╡ c54622f5-835d-4957-bdc6-88afed9c9d2a
+# ╠═╡ skip_as_script = true
+#=╠═╡
+boresight_versor(-3)
+  ╠═╡ =#
+
+# ╔═╡ 90811965-8bf0-4a4c-86f4-9bc5c86be71c
+# ╠═╡ skip_as_script = true
+#=╠═╡
+boresight_versor((1,2,3))
+  ╠═╡ =#
+
+# ╔═╡ 278a536f-82dc-4f4e-8000-cc6a064ab2ee
+# ╠═╡ skip_as_script = true
+#=╠═╡
+boresight_versor(1,2,3)
+  ╠═╡ =#
+
 # ╔═╡ 5dc71a85-a20d-4448-98b4-5065a249df1d
 md"""
 ## Struct Definition
@@ -688,6 +734,22 @@ let
 end
   ╠═╡ =#
 
+# ╔═╡ 314c4c2a-6f3b-4a7d-aa83-9073eb67897b
+#=╠═╡
+let
+	rv1 = SatView(LLA(0°, 10°, 800km), em)
+	lat = range(0°, 90°; step = 0.1°)
+	θ = map(lat) do lat
+		rv2 = SatView(LLA(lat, 10°, 600km), em; face = -3)
+		# v = get_visibility(rv1, rv2; fov = 60°)
+		p = get_pointing(rv1, rv2; pointing_type = :thetaphi)[1] |> rad2deg
+	end
+	x = to_degrees(lat)
+	plot(scatter(;x, y = θ))
+	# v,p
+end
+  ╠═╡ =#
+
 # ╔═╡ a61e66cf-b430-4d84-a753-faf42f4b6337
 md"""
 ## Get Mutual Pointing
@@ -702,10 +764,7 @@ Provide the 2-D angular pointing in both directions between `rv1` and `rv2`:
 - `p₁` is the pointing of `rv2` with respect to `rv1`
 - `p₂` is the pointing of `rv1` with respect to `rv2`
 
-`pointing_type` is used to select whether the output are returned in UV or
-ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
-- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
-- `:UV` and `:uv` can be used to represent pointing in UV
+`pointing_type` is used to select whether the outputs should be given in UV or ThetaPhi coordinates. The result are provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv1` (or `rv2`). In this case:
 - `p₁` is a tuple containing the pointing as well as the local CRS coordinates of `rv2` with respect to `rv1`
@@ -732,6 +791,127 @@ let
 	sv1 = sv
 	sv2 = SatView(LLA(0°,1°, 1000km), em)
 	@benchmark get_mutual_pointing($sv1, $sv2; faces = (-3,3))
+end
+  ╠═╡ =#
+
+# ╔═╡ 1de548c0-3830-4161-b80c-be72dd894e85
+md"""
+## Get Visibility
+"""
+
+# ╔═╡ 387d2c76-1a08-441c-97fc-7b0a90a95c9a
+begin
+function get_visibility(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; boresight = rv.face, fov = 90°)
+	ecef = if lla_or_ecef isa LLA
+		ECEFfromLLA(rv.ellipsoid)(lla_or_ecef)
+	else
+		lla_or_ecef
+	end	
+	# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
+	pdiff = (ecef - rv.ecef)
+		
+	# Find the magnitude of the difference to compare with the intersection solutions
+	t = norm(pdiff)
+	normalized_pdiff = pdiff ./ t
+		
+	# Find the intersection points with the ellipsoid
+	t₁,t₂ = _intersection_solutions(normalized_pdiff,rv.ecef,rv.ellipsoid.a,rv.ellipsoid.b)
+
+	# If there is an intersection, we just return false
+	t₁ > 0 && t > t₁+1e-3 && return false, NaN, normalized_pdiff
+
+	xyz = rv.R' * normalized_pdiff
+	θ = acos(dot(xyz, boresight_versor(boresight)))
+	return θ <= fov, θ, normalized_pdiff
+end
+	
+	# Double RefView method
+	get_visibility(rv1::ReferenceView, rv2::ReferenceView, args...; kwargs...) = get_visibility(rv1, rv2.ecef, args...; kwargs...)
+
+	# Single Output
+	get_visibility(rv1::ReferenceView, target; kwargs...) = get_visibility(rv1, target, ExtraOutput(); kwargs...)[1]
+end
+
+# ╔═╡ abb3a7ee-ff60-421c-8a85-23c3ef1ce6af
+#=╠═╡
+let
+	rv1 = SatView(LLA(0°, 10°, 800km), em)
+	rv2 = SatView(LLA(35°, 10°, 600km), em; face = -3)
+	v = get_visibility(rv1, rv2; fov = 60°)
+	p = get_pointing(rv1, rv2; pointing_type = :uv)
+	v,p
+end
+  ╠═╡ =#
+
+# ╔═╡ 864cc72a-6252-45a6-8ed4-81d960c0b080
+#=╠═╡
+let
+	rv1 = SatView(LLA(1°, 10°, 800km), em)
+	rv2 = SatView(LLA(0°, 10°, 600km), em; face = -3)
+	v = get_visibility(rv1, rv2; fov = 60°)
+	p = get_pointing(rv1, rv2; pointing_type = :thetaphi) |> x -> rad2deg.(x)
+	v,p
+end
+  ╠═╡ =#
+
+# ╔═╡ ecd8d6ac-27f6-4a50-81ff-9c8f0b7fed47
+#=╠═╡
+let
+	rv1 = SatView(LLA(50°, 10°, 800km), em)
+	rv2 = SatView(LLA(0°, 10°, 600km), em; face = -3)
+	@benchmark get_visibility($rv1, $rv2; fov = 60°)
+end
+  ╠═╡ =#
+
+# ╔═╡ fe0680dd-95fb-40a0-8063-97c009f552dd
+#=╠═╡
+let
+	rv1 = SatView(LLA(50°, 10°, 800km), em)
+	rv2 = SatView(LLA(0°, 10°, 600km), em; face = -3)
+	@benchmark get_pointing($rv1, $rv2; pointing_type = :thetaphi)
+end
+  ╠═╡ =#
+
+# ╔═╡ f0565008-d355-4ba4-9269-38a8dc4d88bf
+md"""
+## Get Mutual Visibility
+"""
+
+# ╔═╡ abd76e81-2464-4119-a9bf-6046805f8e57
+begin
+function get_mutual_visibility(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; boresights = (rv1.face, rv2.face), fovs = (90°, 90°))
+	fwd = get_visibility(rv1, rv2, eo; boresight = boresights[1], fov = fovs[1])
+
+	# We compute the forward visibility, which also checks for earth intersection
+	fwd[1] || return false, (fwd, fwd)
+
+	normalized_pdiff = -fwd[3]
+
+	xyz = rv2.R' * normalized_pdiff
+	θ = acos(dot(xyz, boresight_versor(boresights[2])))
+	rtn = θ <= fovs[2], θ, normalized_pdiff
+	return fwd[1] && rtn[1], (fwd, rtn)
+end
+
+	# Single Output
+	get_mutual_visibility(rv1::ReferenceView, target; kwargs...) = get_mutual_visibility(rv1, target, ExtraOutput(); kwargs...)[1]
+end
+
+# ╔═╡ de0372e1-da0c-4da9-8236-790ecd667d07
+#=╠═╡
+let
+	rv1 = SatView(LLA(0°, 10°, 800km), em)
+	rv2 = SatView(LLA(1°, 10°, 600km), em; face = -3)
+	v = get_mutual_visibility(rv1, rv2, ExtraOutput(); fovs = (60°, 60°))
+end
+  ╠═╡ =#
+
+# ╔═╡ a9051f97-2561-4317-b215-eac2b4f20aa4
+#=╠═╡
+let
+	rv1 = SatView(LLA(0°, 10°, 800km), em)
+	rv2 = SatView(LLA(1°, 10°, 600km), em; face = -3)
+	@benchmark get_mutual_visibility($rv1, $rv2; fovs = (60°, 60°))
 end
   ╠═╡ =#
 
@@ -1262,7 +1442,7 @@ PlutoUI = "~0.7.51"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-rc3"
+julia_version = "1.9.0"
 manifest_format = "2.0"
 project_hash = "beea89e16737ecde1ef0f3f17f87754b793e3f53"
 
@@ -1701,6 +1881,11 @@ version = "17.4.0+0"
 # ╠═93222642-f2a6-4de7-8c92-21c96ef009a4
 # ╠═cb0b070b-f70a-458e-bf72-0a4d2e93ec41
 # ╠═28c868ca-9954-47ff-8949-a41fb7fc6d41
+# ╟─f4c3876a-a81b-42f3-870a-43526e4c116e
+# ╠═cc51ab70-0167-477f-a62d-88567e94fed9
+# ╠═c54622f5-835d-4957-bdc6-88afed9c9d2a
+# ╠═90811965-8bf0-4a4c-86f4-9bc5c86be71c
+# ╠═278a536f-82dc-4f4e-8000-cc6a064ab2ee
 # ╟─5dc71a85-a20d-4448-98b4-5065a249df1d
 # ╠═c6ee08ba-3546-48ea-9801-edc00dfd25f0
 # ╠═5372f3fe-699a-4f00-8e8e-36cbea224963
@@ -1740,9 +1925,20 @@ version = "17.4.0+0"
 # ╠═951fc2e2-ada9-4aad-876a-4cbd46200f6c
 # ╠═a93e2354-34d1-4d1d-ac3c-f4c99099820a
 # ╠═46eb3a4d-c80b-41a0-9333-aaf6411a010c
+# ╠═abb3a7ee-ff60-421c-8a85-23c3ef1ce6af
+# ╠═314c4c2a-6f3b-4a7d-aa83-9073eb67897b
 # ╟─a61e66cf-b430-4d84-a753-faf42f4b6337
 # ╠═98f3f83d-fcde-48ba-8855-c30643776d81
 # ╠═cda9503a-5262-4318-9f5d-aea7910ab42e
+# ╟─1de548c0-3830-4161-b80c-be72dd894e85
+# ╠═387d2c76-1a08-441c-97fc-7b0a90a95c9a
+# ╠═864cc72a-6252-45a6-8ed4-81d960c0b080
+# ╠═ecd8d6ac-27f6-4a50-81ff-9c8f0b7fed47
+# ╠═fe0680dd-95fb-40a0-8063-97c009f552dd
+# ╟─f0565008-d355-4ba4-9269-38a8dc4d88bf
+# ╠═abd76e81-2464-4119-a9bf-6046805f8e57
+# ╠═de0372e1-da0c-4da9-8236-790ecd667d07
+# ╠═a9051f97-2561-4317-b215-eac2b4f20aa4
 # ╟─1f27b72f-9a3b-4732-a98e-d216af067072
 # ╠═12330b6f-97b0-4efb-9885-49758bc2f127
 # ╠═bcf6ae44-fa8c-4d89-9fb9-01019098d981
