@@ -574,19 +574,7 @@ md"""
 
 # ╔═╡ 83634223-87d0-4c31-801a-af8a7f9f678a
 begin
-"""
-	get_pointing(rv::ReferenceView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; pointing_type::Symbol=:uv, face = rv.face, R=nothing)
-Provide the 2-D angular pointing at which the target point (specified as LLA, ECEF or as another `ReferenceView`) is seen from the ReferenceView object `rv`.
-
-`pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
-
-When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
-
-For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
-
-See also: [`get_mutual_pointing`](@ref), [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
-"""
-function get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; pointing_type::Symbol=:uv, face = sv.face, R = nothing)
+function _get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput, pointing_type::PointingType; face = sv.face, R = nothing)
 	ecef = if lla_or_ecef isa LLA
 		ECEFfromLLA(sv.ellipsoid)(lla_or_ecef)
 	else
@@ -595,11 +583,32 @@ function get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::E
 	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
 	uv, r = UVfromECEF(sv.ecef,_R,sv.ellipsoid)(ecef, eo)
 	xyz = XYZfromUV()(uv, r)
-	if pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+	if pointing_type isa ThetaPhi
 		return ThetaPhifromUV()(uv), xyz
 	else
 		return uv, xyz
 	end
+end
+
+"""
+	get_pointing(rv::ReferenceView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; pointing_type::Symbol=:uv, face = rv.face, R=nothing)
+Provide the 2-D angular pointing at which the target point (specified as LLA, ECEF or as another `ReferenceView`) is seen from the ReferenceView object `rv`.
+
+`pointing_type` is used to select whether the output is returned in UV or
+ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi [rad]
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
+function also returns the coordinated of the identified point in the local CRS
+of `rv`.
+
+For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
+
+See also: [`get_mutual_pointing`](@ref), [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+"""
+function get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; pointing_type::Symbol=:uv, kwargs...)
+	_get_pointing(sv, lla_or_ecef, eo, PointingType(pointing_type); kwargs...)
 end
 
 # Single output version
@@ -693,7 +702,10 @@ Provide the 2-D angular pointing in both directions between `rv1` and `rv2`:
 - `p₁` is the pointing of `rv2` with respect to `rv1`
 - `p₂` is the pointing of `rv1` with respect to `rv2`
 
-`pointing_type` is used to select whether the outputs should be given in UV or ThetaPhi coordinates. The result are provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
+`pointing_type` is used to select whether the output are returned in UV or
+ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv1` (or `rv2`). In this case:
 - `p₁` is a tuple containing the pointing as well as the local CRS coordinates of `rv2` with respect to `rv1`
@@ -733,24 +745,9 @@ md"""
 
 # ╔═╡ 12330b6f-97b0-4efb-9885-49758bc2f127
 begin
-"""
-	get_ecef(rv::ReferenceView, pointing::Point2D[, ::ExtraOutput]; pointing_type::Symbol=:uv, h = 0.0, face = rv.face, R = nothing)
-
-Computes the ECEF coordinates of the point that is seen by `rv` in the direction specified by `pointing` and is located at a target altitude `h` [m] above the earth's surface.
-
-If a valid point can not be found because either earth is blocking the view or no point at altitude `h` can be seen from the provided pointing direction in the `rv` local CRS (also accounting for desired face), the function returns a SVector{3, Float64} filled win NaNs.
-
-`pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
-
-When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
-
-For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
-
-See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_era`](@ref), [`get_distance_on_earth`](@ref).
-"""
-function get_ecef(rv::ReferenceView, pointing::Point2D, eo::ExtraOutput; pointing_type::Symbol=:uv, h = 0.0, face = rv.face, R = nothing)
+function _get_ecef(rv::ReferenceView, pointing::Point2D, eo::ExtraOutput, pointing_type::PointingType; h = 0.0, face = rv.face, R = nothing)
 	_R = isnothing(R) ? inv(rv.R * face_rotation(face)) : R 
-	uv = if pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)
+	uv = if pointing_type isa ThetaPhi
 		UVfromThetaPhi()(pointing)
 	else
 		pointing
@@ -758,6 +755,35 @@ function get_ecef(rv::ReferenceView, pointing::Point2D, eo::ExtraOutput; pointin
 	ecef, r = ECEFfromUV(rv.ecef,_R',rv.ellipsoid)(uv, eo;h)
 	xyz = XYZfromUV()(uv, r)
 	return ecef, xyz
+end
+"""
+	get_ecef(rv::ReferenceView, pointing::Point2D[, ::ExtraOutput]; pointing_type::Symbol=:uv, h = 0.0, face = rv.face, R = nothing)
+
+Computes the ECEF coordinates of the point that is seen by `rv` in the direction
+specified by `pointing` and is located at a target altitude `h` [m] above the
+earth's surface.
+
+If a valid point can not be found because either earth is blocking the view or
+no point at altitude `h` can be seen from the provided pointing direction in the
+`rv` local CRS (also accounting for desired face), the function returns a
+SVector{3, Float64} filled win NaNs.
+
+`pointing_type` is used to select whether the output is returned in UV or
+ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi [rad]
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
+function also returns the coordinated of the identified point in the local CRS
+of `rv`.
+
+For details on how to modify the reference pointing direction using the kwargs
+`face` and `R` look at the documentation of [`get_range`](@ref) 
+
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_era`](@ref), [`get_distance_on_earth`](@ref).
+"""
+function get_ecef(rv::ReferenceView, pointing::Point2D, eo::ExtraOutput; pointing_type::Symbol=:uv, kwargs...)
+	_get_ecef(rv, pointing, eo, PointingType(pointing_type); kwargs...)
 end
 
 # Single Output Version
@@ -793,17 +819,30 @@ begin
 """
 	get_lla(rv::ReferenceView, pointing::Point2D[, ::ExtraOutput]; pointing_type::Symbol=:uv, h = 0.0, face = rv.face, R = nothing)
 
-Computes the LLA coordinates of the point that is seen by `rv` in the direction specified by `pointing` and is located at a target altitude `h` [m] above the earth's surface.
+Computes the LLA coordinates of the point that is seen by `rv` in the direction
+specified by `pointing` and is located at a target altitude `h` [m] above the
+earth's surface.
 
-If a valid point can not be found because either earth is blocking the view or no point at altitude `h` can be seen from the provided pointing direction in the `rv` local CRS (also accounting for desired face), the function returns a SVector{3, Float64} filled win NaNs.
+If a valid point can not be found because either earth is blocking the view or
+no point at altitude `h` can be seen from the provided pointing direction in the
+`rv` local CRS (also accounting for desired face), the function returns a
+SVector{3, Float64} filled win NaNs.
 
-`pointing_type` is used to select whether the output should be given in UV or ThetaPhi coordinates. The result is provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
+`pointing_type` is used to select whether the output is returned in UV or
+ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi [rad]
+- `:UV` and `:uv` can be used to represent pointing in UV
 
-When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
+function also returns the coordinated of the identified point in the local CRS
+of `rv`.
 
-For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
+For details on how to modify the reference pointing direction using the kwargs
+`face` and `R` look at the documentation of [`get_range`](@ref) 
 
-See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_era`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref),
+[`get_lla`](@ref), [`get_ecef`](@ref), [`get_era`](@ref),
+[`get_distance_on_earth`](@ref).
 """
 function get_lla(rv::ReferenceView,pointing::Point2D, eo::ExtraOutput; kwargs...)
 	ecef, xyz = get_ecef(rv, pointing, eo; kwargs...)

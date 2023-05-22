@@ -64,7 +64,7 @@ initialize_eqref()
 # ╠═╡ skip_as_script = true
 #=╠═╡
 md"""
-## Load previous notebook
+# Load previous notebook
 """
   ╠═╡ =#
 
@@ -318,19 +318,23 @@ struct ThetaPhifromUV <: CoordinateTransformations.Transformation end
 Base.inv(::UVfromThetaPhi) = ThetaPhifromUV()
 Base.inv(::ThetaPhifromUV) = UVfromThetaPhi()
 	
-function (::ThetaPhifromUV)(uv::StaticVector{2,T}) where T
+function (::ThetaPhifromUV)(uv)
 	u,v = uv
 	# We use the ISO Physics convention, so θ is the polar angle
-	θ = asin(norm(uv))
+	θ = asin(sqrt(u^2 + v^2))
 	# φ is the angle from the U (W in WND) axis going towards V (N in WND)
 	φ = atan(v,u)
 	return SVector(θ,φ)
 end
-function (::UVfromThetaPhi)(θφ::StaticVector{2,T}) where T
+(t::ThetaPhifromUV)(u,v) = t((u,v))
+
+function (::UVfromThetaPhi)(θφ)
+	_check_radians(θφ)
 	θ,φ = θφ
 	v, u = sin(θ) .* sincos(φ)
 	return SVector(u,v)
 end
+(t::UVfromThetaPhi)(θ,φ) = t((θ,φ))
 end
 
 # ╔═╡ 42c1d4da-2ac8-4b44-92af-8c5f0a3958e9
@@ -466,6 +470,321 @@ end
 let
 	uv = (0,0)
 	XYZfromUV()(uv, 100)
+end
+  ╠═╡ =#
+
+# ╔═╡ 017d2193-9a59-4186-b897-04232d61e02a
+md"""
+## Add Angular Offset
+"""
+
+# ╔═╡ 28a20e60-c694-408d-8aee-5aa35c498878
+# ╠═╡ skip_as_script = true
+#=╠═╡
+todeg(x) = @. $Tuple(rad2deg(x) * °)
+  ╠═╡ =#
+
+# ╔═╡ c122e5eb-bc43-429c-b663-bc3574f2d029
+# ╠═╡ skip_as_script = true
+#=╠═╡
+function test_φ(x, y)
+	x̂ = rem2pi(to_radians(x), RoundNearest)
+	ŷ = rem2pi(to_radians(y), RoundNearest)
+	result = abs(x̂) ≈ abs(ŷ) ≈ π || Base.isapprox(x̂, ŷ; atol=1e-10, rtol=1e-5)
+	result || @info "Phi" x y x̂ ŷ Base.isapprox(x̂, ŷ; atol=1e-10, rtol=1e-5)
+	result
+end
+  ╠═╡ =#
+
+# ╔═╡ 50184617-bc1f-49cd-ae9d-712e15250398
+begin
+# Compute the rotation matrix to find offset points following the procedure in
+# this stackexchnge answer:
+# https://math.stackexchange.com/questions/4343044/rotate-vector-by-a-random-little-amount
+function test_offset_rotation(θ, φ)
+	# Precompute the sines and cosines
+	sθ, cθ = sincos(θ)
+	sφ, cφ = sincos(φ)
+
+	x̂ = SA_F64[sφ^2 + cθ * cφ^2, -sφ*cφ + cθ*sφ*cφ, -sθ*cφ]
+	ŷ = SA_F64[x̂[2], x̂[1], x̂[3]]
+	ẑ = SA_F64[sθ*cφ, sθ*sφ, cθ]
+	
+	
+	_R = hcat(x̂, ŷ, ẑ) # φ̂ has to change sign to maintain the right-rule axis order
+	# We have to create a rotation matrix around Z that is equivalent to π/2 - φ
+
+	return _R
+end
+test_offset_rotation(θφ) = test_offset_rotation(θφ...)
+end
+
+# ╔═╡ f52f8229-4320-4b17-ab8c-cfc430d4fa1b
+begin
+# Compute the rotation matrix to find offset points following the procedure in
+# this stackexchnge answer:
+# https://math.stackexchange.com/questions/4343044/rotate-vector-by-a-random-little-amount
+function angle_offset_rotation(θ, φ)
+	# Precompute the sines and cosines
+	sθ, cθ = sincos(θ)
+	sφ, cφ = sincos(φ)
+	
+	# Compute the versors of the spherical to cartesian transformation as per
+	# [Wikipedia](https://en.wikipedia.org/wiki/Spherical_coordinate_system#Integration_and_differentiation_in_spherical_coordinates)
+	r̂ = SA_F64[sθ*cφ, sθ*sφ, cθ]
+	θ̂ = SA_F64[cθ*cφ, cθ*sφ, -sθ]
+	φ̂ = SA_F64[-sφ, cφ, 0]
+
+	# The standard basis for spherical coordinates is r̂, θ̂, φ̂. We instead
+	# want a basis that has r̂ as third vector (e.g. ẑ in normal cartesian
+	# coordinates), and we want to rotate the other two vectors in a way that
+	# the second vector is pointing towards Positive ŷ (i.e. similar to how ENU
+	# has the second direction pointing towards North). 
+	# To achieve this, we have to reorder the versor and then perform a matrix
+	# rotation around the new third axis (which is r̂) by an angle that depends
+	# on φ.
+	# See
+	# ![image](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Kugelkoord-lokale-Basis-s.svg/360px-Kugelkoord-lokale-Basis-s.svg.png)
+	# for a reference figure of the original spherical versors.
+	_R = hcat(-φ̂, θ̂, r̂) # φ̂ has to change sign to maintain the right-rule axis order
+	# We have to create a rotation matrix around Z that is equivalent to π/2 - φ
+
+	# We use the RotZ Matrix definition in
+	# https://en.wikipedia.org/wiki/Rotation_matrix#Basic_rotations, but
+	# remembering that: 
+	# cos(π/2 - φ) = sin(φ)
+	# sin(π/2 - φ) = cos(φ)
+	__R = SA_F64[
+		sφ -cφ 0
+		cφ sφ 0
+		0 0 1
+	]
+
+	# return __R, _R, __R*_R, _R*__R
+	return _R*__R
+end
+angle_offset_rotation(θφ) = angle_offset_rotation(θφ...)
+end
+
+# ╔═╡ 9ee2004f-f50a-44c1-8bdb-290471a2617e
+begin
+	test_rot(θ, φ) = RotZYZ(π + φ, -θ, π - φ)
+	test_rot(tp) = test_rot(tp...)
+end
+
+# ╔═╡ caad1fed-fea3-4571-a295-75aaa9929862
+# ╠═╡ disabled = true
+# ╠═╡ skip_as_script = true
+#=╠═╡
+let
+	tp = (10°, 35°)
+	a = @benchmark angle_offset_rotation($tp)
+	b = @benchmark test_rot($tp)
+	a,b
+end
+  ╠═╡ =#
+
+# ╔═╡ 9cb24af1-0023-4a5b-9b01-9e1aa3ba2e6e
+#=╠═╡
+let
+	tp = [(rand() * 180°, rand()*360°) for _ in 1:100]
+	a = map(angle_offset_rotation, tp)
+	b = map(test_rot, tp)
+	b1 = @benchmark map(angle_offset_rotation, $tp)
+	b2 = @benchmark map(test_rot, $tp)
+	valid = @test all(a .≈ b)
+	b1, b2, valid
+end
+  ╠═╡ =#
+
+# ╔═╡ 92d05476-cbb4-44eb-bba6-055aed1a1a17
+#=╠═╡
+let
+	tp = [(rand() * 180°, rand()*360°) for _ in 1:1000]
+	tp2 = (rand() * 180°, rand()*360°)
+	function f1(tp, tp2)
+		θ, φ = to_radians(tp2)
+		sθ, cθ = sincos(θ)
+		sφ, cφ = sincos(φ)
+		R = angle_offset_rotation(tp)
+		perturbation = SA_F64[sθ*cφ, sθ*sφ, cθ]
+		p3_out = R * perturbation
+	end
+	function f2(tp, tp2)
+		θ, φ = to_radians(tp2)
+		sθ, cθ = sincos(θ)
+		sφ, cφ = sincos(φ)
+		R = test_rot(tp)
+		perturbation = SA_F64[sθ*cφ, sθ*sφ, cθ]
+		p3_out = R * perturbation
+	end
+	a = map(y -> f1(y,tp2), tp)
+	b = map(y -> f2(y,tp2), tp)
+	b2 = @benchmark map(y -> $f2(y,$tp2), $tp)
+	b1 = @benchmark map(y -> $f1(y,$tp2), $tp)
+	valid = @test all(a .≈ b)
+	b1, b2, valid
+end
+  ╠═╡ =#
+
+# ╔═╡ 1a723bf6-686c-4c05-a876-463010285757
+#=╠═╡
+let
+	x = (30°, 90°)
+	@benchmark angle_offset_rotation($x)
+end
+  ╠═╡ =#
+
+# ╔═╡ b79949d3-de02-4608-8248-89ad72e85fb9
+begin
+function _add_angular_offset(p₀, offset_angles, input_type::PointingType, output_type::PointingType)
+	θ, φ = to_radians(offset_angles)
+	sθ, cθ = sincos(θ)
+	sφ, cφ = sincos(φ)
+	
+	θφ_in = if input_type isa ThetaPhi
+		to_radians(p₀)
+	else
+		ThetaPhifromUV()(p₀)
+	end
+	R = angle_offset_rotation(θφ_in)
+	perturbation = SA_F64[sθ*cφ, sθ*sφ, cθ]
+	p3_out = R * perturbation
+	u,v,w = p3_out
+	@assert w >= 0 "The resulting point has a θ > π/2, so it is located behind the viewer"
+	out = if output_type isa ThetaPhi
+		ThetaPhifromUV()(u,v)
+	else
+		SVector{2,Float64}(u,v)
+	end
+end
+end
+
+# ╔═╡ b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+begin
+"""
+	p = add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	p = add_angular_offset(p₀, θ::ValidAngle, φ::ValidAngle = 0.0; input_type = :UV, output_type = :UV)
+
+Compute the resulting pointing direction `p` obtained by adding an angular offset
+specified by angles θ, φ (following the ISO/Physics convention for spherical
+coordinates) [rad] to the starting position identified by p₀.
+
+The input starting position `p₀` can be specified as any iterable of 2 elements
+and is interpreted (depending on the value of the `input_type` kwarg) as a set
+of 2D coordinates specified either as U-V or Theta-Phi [rad]. 
+
+The output pointing `p` is always provided as a `SVector{2, Float64}` and similarly
+to `p₀` can be given as either UV or ThetaPhi coordinates depending on the value
+of the `output_type` kwarg.
+
+For both `input_type` and `output_type`, the following Symbols are supported:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+The offset angles can be provided either as 2nd and 3rd argument to the function
+(2nd method) or as an iterable containing θ and φ as first and second element
+respectively (1st method).
+
+This function performs the inverse operation of [`get_angular_offset`](@ref) so the following code should return true
+```julia
+uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+p = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+all(p .≈ uv2)
+```
+
+See also: [`get_angular_offset`](@ref), [`get_angular_distance`](@ref)
+"""
+function add_angular_offset(p₀, offset_angles; input_type = :UV, output_type = :UV)
+	_add_angular_offset(p₀, offset_angles, PointingType(input_type), PointingType(output_type))
+end
+
+# Version with separate angles
+add_angular_offset(p₀,θ::ValidAngle, φ::ValidAngle = 0; kwargs...) = add_angular_offset(p₀, (θ, φ); kwargs...)
+end
+
+# ╔═╡ 3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
+#=╠═╡
+@benchmark add_angular_offset((0.5,0), (10°, 0))
+  ╠═╡ =#
+
+# ╔═╡ 7bf3168c-7be0-4bb8-98cc-7a4cab893463
+#=╠═╡
+let
+	u = rand(1000).* .5
+	f(x) = _add_angular_offset((x,0.0), (10°, 0°), UV(), ThetaPhi())
+	@benchmark map($f, $u)
+end
+  ╠═╡ =#
+
+# ╔═╡ 80395e68-85be-42f5-ac6a-b7719b957da3
+md"""
+## Get Angular Offset
+"""
+
+# ╔═╡ 75d0a1c9-2535-4dcf-ae78-311aa2d76a80
+function _get_angular_distance(p₁, p₂, input_type::PointingType, output_type::PointingType)
+	if input_type isa UV && output_type isa UV
+		Δu = p₂[1] - p₁[1]
+		Δv = p₂[2] - p₁[2]
+		return sqrt(Δu^2 + Δv^2)
+	end
+	uv₂, uv₁ = if input_type isa ThetaPhi
+		tp2uv = UVfromThetaPhi()
+		@. tp2uv(to_radians((p₁, p₂)))
+	else
+		SVector{2,Float64}.((p₁, p₂))
+	end
+	if output_type isa UV
+		return norm(uv₂ - uv₁)
+	end
+	uv2xyz = XYZfromUV()
+	p₁_xyz = uv2xyz(uv₁,1)
+	p₂_xyz = uv2xyz(uv₂,1)
+	return acos(p₁_xyz'p₂_xyz)
+end
+
+# ╔═╡ 61738518-f090-4551-88b4-0e36298d93f9
+"""
+	get_angular_distance(p₁, p₂; input_type=:UV, output_type=:thetaphi)
+
+Compute the angular distance between the target pointing direction `p₂` and the starting pointing direction `p₁`. The two target pointings can be intepreted as either UV or ThetaPhi coordinates depending on the value of the `input_type` kwarg.
+
+The output is a scalar that depending on the value of the `output_type` kwarg represents either the distance in UV, or the angular distance (Δθ) between `p₂` and `p₁`.
+
+For both `input_type` and `output_type`, the following Symbols are supported:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+## Note
+All input angles are intepreted as radians unless specified as a Quantity in degrees using `°` from Unitful.
+
+The output angles (when `output_type` is ThetaPhi) are also expressed in radians
+
+This function is similar to [`get_angular_offset`](@ref) but has a slightly faster implementation in case only the distance is required, rather than the full 2D offset.
+The following code should evaluate to true
+```julia
+uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+Δθ = get_angular_distance(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+offset[1] ≈ Δθ
+```
+
+See also: [`add_angular_offset`](@ref), [`get_angular_offset`](@ref)
+"""
+function get_angular_distance(p₁, p₂; input_type = :UV, output_type = :thetaphi)
+	_get_angular_distance(p₁, p₂, PointingType(input_type), PointingType(output_type))
+end
+
+# ╔═╡ 85d67f04-169d-43de-ade1-b163169aff74
+#=╠═╡
+let
+	x = rand(1000)
+	f(x) = get_angular_distance((x,0),(.4,0); input_type = :thetaphi, output_type = :thetaphi)
+	@benchmark map($f, $x)
 end
   ╠═╡ =#
 
@@ -873,11 +1192,129 @@ begin
 	(trans::UVfromLLA)(tup::Tuple{<:Number, <:Number, <:Number},args...) = trans(LLA(tup...),args...)
 end
 
+# ╔═╡ 0194ef46-0946-41a4-8909-e3e08328b4b6
+function _get_angular_offset(p₁, p₂, input_type::PointingType, output_type::PointingType)
+	if input_type isa UV && output_type isa UV
+		Δu = p₂[1] - p₁[1]
+		Δv = p₂[2] - p₁[2]
+		return SVector{2, Float64}(Δu, Δv)
+	end
+	uv2tp = ThetaPhifromUV()
+	tp2uv = inv(uv2tp)
+	uv, θφ = if input_type isa ThetaPhi
+		tp = to_radians.((p₁, p₂))
+		uv = tp2uv.(tp)
+		uv, tp
+	else
+		uv = (p₁, p₂)
+		tp = uv2tp.(uv)
+		uv, tp
+	end
+	if output_type isa UV
+		Δu = uv[2][1] - uv[1][1]
+		Δv = uv[2][2] - uv[1][2]
+		return SVector{2, Float64}(Δu, Δv)
+	end
+		
+	
+	R = angle_offset_rotation(θφ[1]) # We take p₁ as reference
+	p₂_xyz = XYZfromUV()(uv[2], 1) # We create the 3D vector corresponding to p₂
+	perturbation = R' * p₂_xyz
+	u, v, w = perturbation
+	th = acos(w)
+	phi = atan(v,u)
+	return SA_F64[th, phi]
+end
+
+# ╔═╡ afe59330-5f20-43a7-8ed5-a9113602e3bc
+"""
+	get_angular_offset(p₁, p₂; input_type=:UV, output_type=:thetaphi)
+Compute the angular offset required to reach the target pointing direction `p₂` from starting pointing direction `p₁`. The two target pointings can be intepreted as either UV or ThetaPhi coordinates depending on the value of the `input_type` kwarg.
+
+The output is provided as an SVector{2,Float64} and depending on the value of the `output_type` kwarg it represents either the Δu, Δv offset in UV, or the angular offset (θ and φ) required to reach `p₂` from `p₁`.
+
+For both `input_type` and `output_type`, the following Symbols are supported:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi
+- `:UV` and `:uv` can be used to represent pointing in UV
+
+## Note
+All input angles are intepreted as radians unless specified as a Quantity in degrees using `°` from Unitful.
+
+The output angles (when `output_type` is ThetaPhi) are also expressed in radians
+
+This function performs the inverse operation of [`add_angular_offset`](@ref) so the following code should return true
+```julia
+uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+p = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+all(p .≈ uv2)
+```
+
+Check out [`get_angular_distance`](@ref) for a slightly faster implementation in case you only require the angular distance rather than the 2D offset.
+
+See also: [`add_angular_offset`](@ref), [`get_angular_distance`](@ref)
+"""
+function get_angular_offset(p₁, p₂; input_type = :UV, output_type = :thetaphi)
+	_get_angular_offset(p₁, p₂, PointingType(input_type), PointingType(output_type))
+end
+
 # ╔═╡ f5577c80-ffdd-44ae-bc05-2baed9de1234
 begin
 	export LLAfromECEF, ECEFfromLLA, LLAfromUV, UVfromLLA, ECEFfromENU, ENUfromECEF, ERAfromENU, ENUfromERA, ERAfromECEF, ECEFfromERA, ECEFfromUV, UVfromECEF
 	export compute_sat_position
+	export add_angular_offset, get_angular_offset, get_angular_distance
 end
+
+# ╔═╡ 97792ee2-be00-4521-b8bb-574ce03a003a
+#=╠═╡
+  let
+	  for i in 1:100
+        tp1 = SVector{2}(rand()*90°, (rand()-.5)*360°) |> Tuple
+        tp2 = SVector{2}(rand()*90°, (rand()-.5)*360°) |> Tuple
+        offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi) |> todeg
+        tp_target = add_angular_offset(tp1, offset; input_type = :thetaphi, output_type = :thetaphi) |> todeg
+        (tp_target[1] ≈ tp2[1] && test_φ(tp_target[2], tp2[2])) || error("The forward-reverse offset test with angles failed with $((;tp1, tp2, tp_target, offset))")
+	  end
+  end
+  ╠═╡ =#
+
+# ╔═╡ f2510c0d-56f3-41be-8617-a4cb81e9aba8
+#=╠═╡
+let
+	uv1 = (.3,.4)
+uv2 = (-.2,.5)
+offset = get_angular_offset(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+D = get_angular_distance(uv1, uv2; input_type = :uv, output_type = :thetaphi)
+p = add_angular_offset(uv1, offset; input_type = :uv, output_type = :uv)
+@test all(p .≈ uv2) && offset[1] ≈ D
+end
+  ╠═╡ =#
+
+# ╔═╡ 1b5241eb-c2ed-482f-9a99-f9c951a5e853
+#=╠═╡
+let
+	x = rand(1000)
+	f(x) = get_angular_offset((x,0),(.4,0); input_type = :thetaphi, output_type = :thetaphi)
+	@benchmark map($f, $x)
+end
+  ╠═╡ =#
+
+# ╔═╡ 3700617d-e48f-49df-a41a-d49fabf1c52e
+#=╠═╡
+let
+	uv2tp = ThetaPhifromUV()
+	uv1 = (.4,0)
+	uv2 = (.3,.5)
+	tp1 = uv2tp(uv1)
+	tp2 = uv2tp(uv2)
+	input_type = :uv
+	output_type = :thetaphi
+	dist = get_angular_distance(uv1, uv2; input_type, output_type)
+	offset = get_angular_offset(uv1,uv2; input_type, output_type)
+	@test dist ≈ offset[1]
+end
+  ╠═╡ =#
 
 # ╔═╡ d292f0d3-6a35-4f35-a5f6-e15e1c29f0f1
 md"""
@@ -1386,7 +1823,31 @@ version = "17.4.0+0"
 # ╠═31089d3a-e122-4f4a-bf6a-33bd6a7bff3f
 # ╠═1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
 # ╠═88ba47dd-5845-4c36-83bc-d02c3cabcd63
-# ╠═ee3aa19f-317e-46f6-8da2-4792a84b7839
+# ╟─017d2193-9a59-4186-b897-04232d61e02a
+# ╠═28a20e60-c694-408d-8aee-5aa35c498878
+# ╠═c122e5eb-bc43-429c-b663-bc3574f2d029
+# ╠═50184617-bc1f-49cd-ae9d-712e15250398
+# ╠═caad1fed-fea3-4571-a295-75aaa9929862
+# ╠═f52f8229-4320-4b17-ab8c-cfc430d4fa1b
+# ╠═9ee2004f-f50a-44c1-8bdb-290471a2617e
+# ╠═9cb24af1-0023-4a5b-9b01-9e1aa3ba2e6e
+# ╠═92d05476-cbb4-44eb-bba6-055aed1a1a17
+# ╠═97792ee2-be00-4521-b8bb-574ce03a003a
+# ╠═1a723bf6-686c-4c05-a876-463010285757
+# ╠═b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
+# ╠═b79949d3-de02-4608-8248-89ad72e85fb9
+# ╠═3bc4d363-3a6d-4cd1-b0c2-8a513b53ca55
+# ╠═7bf3168c-7be0-4bb8-98cc-7a4cab893463
+# ╟─80395e68-85be-42f5-ac6a-b7719b957da3
+# ╠═afe59330-5f20-43a7-8ed5-a9113602e3bc
+# ╠═f2510c0d-56f3-41be-8617-a4cb81e9aba8
+# ╠═0194ef46-0946-41a4-8909-e3e08328b4b6
+# ╠═1b5241eb-c2ed-482f-9a99-f9c951a5e853
+# ╠═85d67f04-169d-43de-ade1-b163169aff74
+# ╠═61738518-f090-4551-88b4-0e36298d93f9
+# ╠═75d0a1c9-2535-4dcf-ae78-311aa2d76a80
+# ╠═3700617d-e48f-49df-a41a-d49fabf1c52e
+# ╟─ee3aa19f-317e-46f6-8da2-4792a84b7839
 # ╟─1c9a8798-0b03-4e50-952e-e615192dbd45
 # ╠═2e07bdfa-7393-4864-be2f-35b7843f6cc8
 # ╠═e7a73ba7-731d-4a58-ac39-6fdebff78d7f
