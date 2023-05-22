@@ -190,6 +190,11 @@ function _check_radians_func(limit = π)
 	f(x::UnitfulAngleQuantity) = true
 end
 
+# ╔═╡ 9fcc186e-99fd-4565-8c13-efc868ebd3e9
+md"""
+## Check radians
+"""
+
 # ╔═╡ a166e0d3-bb39-4183-8669-5cb7747007d3
 _check_radians(x; limit = π) = @assert all(_check_radians_func(limit), x) "Angles directly provided as numbers must be expressed in radians and satisfy -$limit ≤ x ≤ $limit
 Consider using `°` from Unitful (Also re-exported by TelecomUtils) if you want to pass numbers in degrees, by doing `x * °`." 
@@ -243,7 +248,12 @@ const ValidAngle = Union{UnitfulAngleQuantity, Real}
 const ValidDistance = Union{Unitful.Length, Real}
 
 # ╔═╡ 75bf2400-23c2-4a98-9a8b-2fe6f5b10271
-_validtype(t, A::Union{DataType, Union}) = eltype(t) isa A || all(x -> x isa A, t)
+_validtype(t, A::Union{DataType, Union}) = eltype(t) <: A || length(t) > 1 && all(x -> _validtype(x, A), t)
+
+# ╔═╡ 5b439f79-ebbb-4ddc-98c6-0d3eeb485d3c
+md"""
+## to radians
+"""
 
 # ╔═╡ c592d893-b693-4ba3-83de-49effcf2159f
 begin
@@ -261,6 +271,19 @@ function to_radians(x)
 end
 end
 
+# ╔═╡ f60c36dd-166b-4090-87ff-384e03984260
+#=╠═╡
+let
+	a = ((10°, 30°), (15°, 130°))
+	@benchmark to_radians($a)
+end
+  ╠═╡ =#
+
+# ╔═╡ 3ed87c8e-8fd6-4d4a-b190-2a0143572800
+md"""
+## to degrees
+"""
+
 # ╔═╡ ed3cfb95-cacb-4cfa-af25-b03c22f1146f
 begin
 to_degrees(x::Real) = x
@@ -273,6 +296,11 @@ function to_degrees(x)
 	end
 end
 end
+
+# ╔═╡ 419c0d72-e9e6-4d63-a71b-f433fe17f9e9
+md"""
+## to meters
+"""
 
 # ╔═╡ 9f437287-27a2-4e7d-b394-1a4eb2ee2825
 begin
@@ -1265,6 +1293,7 @@ version = "17.4.0+0"
 # ╠═e832c1b7-8c04-4146-90f6-1628e91fea2a
 # ╠═64cf1b8b-6686-4eeb-a3cc-786300ea7c7d
 # ╠═ab2a30e0-f87b-4e65-8e56-78c283f3eb98
+# ╟─9fcc186e-99fd-4565-8c13-efc868ebd3e9
 # ╠═a166e0d3-bb39-4183-8669-5cb7747007d3
 # ╠═4c3585d9-5671-4658-a8e5-4900daf51aa4
 # ╠═8f31a1f3-fe78-4aad-ae1e-91d08f85960e
@@ -1274,8 +1303,12 @@ version = "17.4.0+0"
 # ╠═c7ff7ef2-0e7d-4d36-8463-9c046fd36999
 # ╠═34b02d15-d9d0-4b34-a1ae-bb2183b8ef47
 # ╠═75bf2400-23c2-4a98-9a8b-2fe6f5b10271
+# ╟─5b439f79-ebbb-4ddc-98c6-0d3eeb485d3c
 # ╠═c592d893-b693-4ba3-83de-49effcf2159f
+# ╠═f60c36dd-166b-4090-87ff-384e03984260
+# ╟─3ed87c8e-8fd6-4d4a-b190-2a0143572800
 # ╠═ed3cfb95-cacb-4cfa-af25-b03c22f1146f
+# ╟─419c0d72-e9e6-4d63-a71b-f433fe17f9e9
 # ╠═9f437287-27a2-4e7d-b394-1a4eb2ee2825
 # ╟─1d023a0c-a93a-451c-a894-1d1f6a4b78a9
 # ╠═b8ce87d4-4768-4e8a-a16e-9e68b00b6617
