@@ -807,18 +807,10 @@ function get_visibility(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo:
 	else
 		lla_or_ecef
 	end	
-	# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
-	pdiff = (ecef - rv.ecef)
-		
-	# Find the magnitude of the difference to compare with the intersection solutions
-	t = norm(pdiff)
-	normalized_pdiff = pdiff ./ t
-		
-	# Find the intersection points with the ellipsoid
-	t₁,t₂ = _intersection_solutions(normalized_pdiff,rv.ecef,rv.ellipsoid.a,rv.ellipsoid.b)
+	blocked, normalized_pdiff, _ = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
 
-	# If there is an intersection, we just return false
-	t₁ > 0 && t > t₁+1e-3 && return false, NaN, normalized_pdiff
+	# # If there is an intersection, we just return false
+	# t₁ > 0 && t > t₁+1e-3 && return false, NaN, normalized_pdiff
 
 	xyz = rv.R' * normalized_pdiff
 	θ = acos(dot(xyz, boresight_versor(boresight)))
