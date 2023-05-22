@@ -135,11 +135,11 @@ end
         uv_target ≈ uv2 || error("The forward-reverse offset test failed with $((;uv1, uv2))")
     end
     @test_nowarn for i in 1:100
-        tp1 = SVector{2}(rand()*50°, (rand()-.5)*360°)
-        tp2 = SVector{2}(rand()*50°, (rand()-.5)*360°)
+        tp1 = (rand()*90°, (rand()-.5)*360°)
+        tp2 = (rand()*90°, (rand()-.5)*360°)
         offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi) |> todeg
         tp_target = add_angular_offset(tp1, offset; input_type = :thetaphi, output_type = :thetaphi) |> todeg
-        (tp_target[1] ≈ tp2[1] && test_φ(tp_target[2], tp2[2])) || error("The forward-reverse offset test with angles failed with $((;tp1, tp2, tp_target))")
+        (tp_target[1] ≈ tp2[1] && test_φ(tp_target[2], tp2[2])) || error("The forward-reverse offset test with angles failed with $((;tp1, tp2, tp_target, offset))")
     end
 
     # Test the match within the extracted angular distance
@@ -150,11 +150,11 @@ end
         dist = get_angular_distance(uv1, uv2; input_type=:uv, output_type=:thetaphi)
         offset[1] ≈ dist || error("The distance-offset test in UV failed with $((;uv1, uv2, dist, offset))")
     end
-    # @test_nowarn for i in 1:100
-    #     tp1 = SVector{2}(rand()*50°, (rand()-.5)*360°)
-    #     tp2 = SVector{2}(rand()*50°, (rand()-.5)*360°)
-    #     offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi)
-    #     dist = get_angular_distance(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi)
-    #     offset[1] ≈ dist || error("The distance-offset test in ThetaPhi failed with $((;tp1, tp2, dist, offset))")
-    # end
+    @test_nowarn for i in 1:100
+        tp1 = (rand()*90°, (rand()-.5)*360°)
+        tp2 = (rand()*90°, (rand()-.5)*360°)
+        offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi) |> todeg
+        dist = get_angular_distance(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi)
+        offset[1] ≈ dist || error("The distance-offset test in ThetaPhi failed with $((;tp1, tp2, dist, offset))")
+    end
 end

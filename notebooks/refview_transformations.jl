@@ -478,6 +478,47 @@ md"""
 ## Add Angular Offset
 """
 
+# ╔═╡ 28a20e60-c694-408d-8aee-5aa35c498878
+# ╠═╡ skip_as_script = true
+#=╠═╡
+todeg(x) = @. $Tuple(rad2deg(x) * °)
+  ╠═╡ =#
+
+# ╔═╡ c122e5eb-bc43-429c-b663-bc3574f2d029
+# ╠═╡ skip_as_script = true
+#=╠═╡
+function test_φ(x, y)
+	x̂ = rem2pi(to_radians(x), RoundNearest)
+	ŷ = rem2pi(to_radians(y), RoundNearest)
+	result = abs(x̂) ≈ abs(ŷ) ≈ π || Base.isapprox(x̂, ŷ; atol=1e-10, rtol=1e-5)
+	result || @info "Phi" x y x̂ ŷ Base.isapprox(x̂, ŷ; atol=1e-10, rtol=1e-5)
+	result
+end
+  ╠═╡ =#
+
+# ╔═╡ 50184617-bc1f-49cd-ae9d-712e15250398
+begin
+# Compute the rotation matrix to find offset points following the procedure in
+# this stackexchnge answer:
+# https://math.stackexchange.com/questions/4343044/rotate-vector-by-a-random-little-amount
+function test_offset_rotation(θ, φ)
+	# Precompute the sines and cosines
+	sθ, cθ = sincos(θ)
+	sφ, cφ = sincos(φ)
+
+	x̂ = SA_F64[sφ^2 + cθ * cφ^2, -sφ*cφ + cθ*sφ*cφ, -sθ*cφ]
+	ŷ = SA_F64[x̂[2], x̂[1], x̂[3]]
+	ẑ = SA_F64[sθ*cφ, sθ*sφ, cθ]
+	
+	
+	_R = hcat(x̂, ŷ, ẑ) # φ̂ has to change sign to maintain the right-rule axis order
+	# We have to create a rotation matrix around Z that is equivalent to π/2 - φ
+
+	return _R
+end
+test_offset_rotation(θφ) = test_offset_rotation(θφ...)
+end
+
 # ╔═╡ f52f8229-4320-4b17-ab8c-cfc430d4fa1b
 begin
 # Compute the rotation matrix to find offset points following the procedure in
@@ -524,6 +565,67 @@ function angle_offset_rotation(θ, φ)
 end
 angle_offset_rotation(θφ) = angle_offset_rotation(θφ...)
 end
+
+# ╔═╡ 9ee2004f-f50a-44c1-8bdb-290471a2617e
+begin
+	test_rot(θ, φ) = RotZYZ(π + φ, -θ, π - φ)
+	test_rot(tp) = test_rot(tp...)
+end
+
+# ╔═╡ caad1fed-fea3-4571-a295-75aaa9929862
+# ╠═╡ disabled = true
+# ╠═╡ skip_as_script = true
+#=╠═╡
+let
+	tp = (10°, 35°)
+	a = @benchmark angle_offset_rotation($tp)
+	b = @benchmark test_rot($tp)
+	a,b
+end
+  ╠═╡ =#
+
+# ╔═╡ 9cb24af1-0023-4a5b-9b01-9e1aa3ba2e6e
+#=╠═╡
+let
+	tp = [(rand() * 180°, rand()*360°) for _ in 1:100]
+	a = map(angle_offset_rotation, tp)
+	b = map(test_rot, tp)
+	b1 = @benchmark map(angle_offset_rotation, $tp)
+	b2 = @benchmark map(test_rot, $tp)
+	valid = @test all(a .≈ b)
+	b1, b2, valid
+end
+  ╠═╡ =#
+
+# ╔═╡ 92d05476-cbb4-44eb-bba6-055aed1a1a17
+#=╠═╡
+let
+	tp = [(rand() * 180°, rand()*360°) for _ in 1:1000]
+	tp2 = (rand() * 180°, rand()*360°)
+	function f1(tp, tp2)
+		θ, φ = to_radians(tp2)
+		sθ, cθ = sincos(θ)
+		sφ, cφ = sincos(φ)
+		R = angle_offset_rotation(tp)
+		perturbation = SA_F64[sθ*cφ, sθ*sφ, cθ]
+		p3_out = R * perturbation
+	end
+	function f2(tp, tp2)
+		θ, φ = to_radians(tp2)
+		sθ, cθ = sincos(θ)
+		sφ, cφ = sincos(φ)
+		R = test_rot(tp)
+		perturbation = SA_F64[sθ*cφ, sθ*sφ, cθ]
+		p3_out = R * perturbation
+	end
+	a = map(y -> f1(y,tp2), tp)
+	b = map(y -> f2(y,tp2), tp)
+	b2 = @benchmark map(y -> $f2(y,$tp2), $tp)
+	b1 = @benchmark map(y -> $f1(y,$tp2), $tp)
+	valid = @test all(a .≈ b)
+	b1, b2, valid
+end
+  ╠═╡ =#
 
 # ╔═╡ 1a723bf6-686c-4c05-a876-463010285757
 #=╠═╡
@@ -612,7 +714,7 @@ end
 #=╠═╡
 let
 	u = rand(1000).* .5
-	f(x) = add_angular_offset((x,0), (10°, 0); output_type = :thetaphi)
+	f(x) = _add_angular_offset((x,0.0), (10°, 0°), UV(), ThetaPhi())
 	@benchmark map($f, $u)
 end
   ╠═╡ =#
@@ -1118,8 +1220,10 @@ function _get_angular_offset(p₁, p₂, input_type::PointingType, output_type::
 	R = angle_offset_rotation(θφ[1]) # We take p₁ as reference
 	p₂_xyz = XYZfromUV()(uv[2], 1) # We create the 3D vector corresponding to p₂
 	perturbation = R' * p₂_xyz
-	u, v, _ = perturbation
-	return uv2tp(u,v)
+	u, v, w = perturbation
+	th = acos(w)
+	phi = atan(v,u)
+	return SA_F64[th, phi]
 end
 
 # ╔═╡ afe59330-5f20-43a7-8ed5-a9113602e3bc
@@ -1161,6 +1265,19 @@ begin
 	export compute_sat_position
 	export add_angular_offset, get_angular_offset, get_angular_distance
 end
+
+# ╔═╡ 97792ee2-be00-4521-b8bb-574ce03a003a
+#=╠═╡
+  let
+	  for i in 1:100
+        tp1 = SVector{2}(rand()*90°, (rand()-.5)*360°) |> Tuple
+        tp2 = SVector{2}(rand()*90°, (rand()-.5)*360°) |> Tuple
+        offset = get_angular_offset(tp1, tp2; input_type=:thetaphi, output_type=:thetaphi) |> todeg
+        tp_target = add_angular_offset(tp1, offset; input_type = :thetaphi, output_type = :thetaphi) |> todeg
+        (tp_target[1] ≈ tp2[1] && test_φ(tp_target[2], tp2[2])) || error("The forward-reverse offset test with angles failed with $((;tp1, tp2, tp_target, offset))")
+	  end
+  end
+  ╠═╡ =#
 
 # ╔═╡ f2510c0d-56f3-41be-8617-a4cb81e9aba8
 #=╠═╡
@@ -1707,7 +1824,15 @@ version = "17.4.0+0"
 # ╠═1b0bb6f6-648d-46c8-b45b-85fbac0b2ed9
 # ╠═88ba47dd-5845-4c36-83bc-d02c3cabcd63
 # ╟─017d2193-9a59-4186-b897-04232d61e02a
+# ╠═28a20e60-c694-408d-8aee-5aa35c498878
+# ╠═c122e5eb-bc43-429c-b663-bc3574f2d029
+# ╠═50184617-bc1f-49cd-ae9d-712e15250398
+# ╠═caad1fed-fea3-4571-a295-75aaa9929862
 # ╠═f52f8229-4320-4b17-ab8c-cfc430d4fa1b
+# ╠═9ee2004f-f50a-44c1-8bdb-290471a2617e
+# ╠═9cb24af1-0023-4a5b-9b01-9e1aa3ba2e6e
+# ╠═92d05476-cbb4-44eb-bba6-055aed1a1a17
+# ╠═97792ee2-be00-4521-b8bb-574ce03a003a
 # ╠═1a723bf6-686c-4c05-a876-463010285757
 # ╠═b02ee0d4-3bfa-4131-90cc-2bbfef7ef586
 # ╠═b79949d3-de02-4608-8248-89ad72e85fb9

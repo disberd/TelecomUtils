@@ -575,6 +575,15 @@ let
 end
   ╠═╡ =#
 
+# ╔═╡ 11b60a30-f2e0-41dc-9909-893a18f079b1
+#=╠═╡
+let
+	lla1 = LLA(30°, 40°, 0km)
+	lla2 = LLA(30°, 140°, 0km)
+	geod_inverse(em, lla1, lla2)
+end
+  ╠═╡ =#
+
 # ╔═╡ 11938cb6-46b3-499b-96c0-ef6424d1d0db
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -1292,6 +1301,7 @@ version = "17.4.0+0"
 # ╠═11938cb6-46b3-0002-96c0-ef6424d1d0db
 # ╠═52fafdd7-503a-4665-a86f-ddd9fd6552ea
 # ╠═87dec4f1-3842-4291-ad1c-1a384a197508
+# ╠═11b60a30-f2e0-41dc-9909-893a18f079b1
 # ╠═11938cb6-46b3-499b-96c0-ef6424d1d0db
 # ╠═d2c248b1-c48e-437b-a910-edcc59b4424f
 # ╠═7b306ed5-4bda-465d-abf2-4d07cb4642c1
