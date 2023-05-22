@@ -66,8 +66,10 @@ end
     # Test extra output
     _, xyz = get_pointing(sv, LLA(0, 0, 0), ExtraOutput())
     @test isapprox(xyz, SA_F64[0, 0, sv.lla.alt]; atol=1e-10)
-    _, xyz = get_pointing(sv, LLA(0, 0, 0), ExtraOutput(); face=:NegativeZ)
-    @test isnan(xyz) # The point is behind the satellite reference face
+    uv, xyz = get_pointing(sv, LLA(0, 180°, 0), ExtraOutput())
+    @test isnan(uv) && isnan(xyz) # The target is blocked by earth
+    uv, xyz = get_pointing(sv, LLA(0, 0, 0), ExtraOutput(); face=:NegativeZ)
+    @test isnan(uv) && isapprox(xyz, SA_F64[0, 0, -sv.lla.alt]; atol=1e-10) # The point is behind the satellite reference face
     _, xyz = get_pointing(sv, LLA(0, 0, 0), ExtraOutput(); face=:PositiveX)
     @test isapprox(xyz, SA_F64[-sv.lla.alt, 0, 0]; atol=1e-10)
 

@@ -620,19 +620,26 @@ md"""
 
 # ╔═╡ 83634223-87d0-4c31-801a-af8a7f9f678a
 begin
-function _get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput, pointing_type::PointingType; face = sv.face, R = nothing)
+function _get_pointing(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput, pointing_type::PointingType; face = rv.face, R = nothing)
 	ecef = if lla_or_ecef isa LLA
-		ECEFfromLLA(sv.ellipsoid)(lla_or_ecef)
+		ECEFfromLLA(rv.ellipsoid)(lla_or_ecef)
 	else
 		lla_or_ecef
 	end
-	_R = isnothing(R) ? inv(sv.R * face_rotation(face)) : R 
-	uv, r = UVfromECEF(sv.ecef,_R,sv.ellipsoid)(ecef, eo)
-	xyz = XYZfromUV()(uv, r)
+	# Check if earth is blocking
+	blocked, normalized_pdiff, pdiff = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
+
+	# If there is an intersection, we just return false
+	blocked && return SA_F64[NaN, NaN], SA_F64[NaN, NaN, NaN]
+	_R = isnothing(R) ? inv(rv.R * face_rotation(face)) : R 
+	xyz = _R * pdiff
+	x,y,z = normalize(xyz)
+	# If the target is behind, we return NaN as first output
+	z < 0 && return SA_F64[NaN, NaN], xyz
 	if pointing_type isa ThetaPhi
-		return ThetaPhifromUV()(uv), xyz
+		return SA_F64[acos(z), atan(y,x)], xyz
 	else
-		return uv, xyz
+		return SA_F64[x, y], xyz
 	end
 end
 
@@ -672,7 +679,8 @@ end
 let
 	lla_ref = LLA(1°, 0.5°, 0km)
 	ecef_ref = ECEFfromLLA(em.ellipsoid)(lla_ref)
-	@benchmark get_pointing($sv, $lla_ref)
+	# @benchmark get_pointing($sv, $lla_ref)
+	@code_warntype get_pointing(sv, lla_ref)
 end
   ╠═╡ =#
 
@@ -799,6 +807,29 @@ md"""
 ## Get Visibility
 """
 
+# ╔═╡ 664be7e6-28f5-4ab3-b8f0-b7618bcd5fe5
+# ╠═╡ skip_as_script = true
+#=╠═╡
+begin
+@addmethod function earth_blocking(ecef1, ecef2, a, b, ::ExtraOutput)
+	@inline
+	# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
+	pdiff = (ecef2 - ecef1)
+		
+	# Find the magnitude of the difference to compare with the intersection solutions
+	t = norm(pdiff)
+	normalized_pdiff = pdiff ./ t
+	t₁,t₂ = _intersection_solutions(normalized_pdiff,ecef1,a,b)
+	# If there is an intersection, we return true and the normalized_pdiff
+	blocked = t₁ > 0 && t > t₁+1e-3
+	return blocked, normalized_pdiff, pdiff
+end
+
+# Single Output Version
+@addmethod earth_blocking(ecef1, ecef2, a, b) = earth_blocking(ecef1, ecef2, a, b, ExtraOutput())[1]
+end
+  ╠═╡ =#
+
 # ╔═╡ 387d2c76-1a08-441c-97fc-7b0a90a95c9a
 begin
 function get_visibility(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; boresight = rv.face, fov = 90°)
@@ -810,7 +841,7 @@ function get_visibility(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo:
 	blocked, normalized_pdiff, _ = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
 
 	# # If there is an intersection, we just return false
-	# t₁ > 0 && t > t₁+1e-3 && return false, NaN, normalized_pdiff
+	blocked && return false, NaN, normalized_pdiff
 
 	xyz = rv.R' * normalized_pdiff
 	θ = acos(dot(xyz, boresight_versor(boresight)))
@@ -1923,6 +1954,7 @@ version = "17.4.0+0"
 # ╠═98f3f83d-fcde-48ba-8855-c30643776d81
 # ╠═cda9503a-5262-4318-9f5d-aea7910ab42e
 # ╟─1de548c0-3830-4161-b80c-be72dd894e85
+# ╠═664be7e6-28f5-4ab3-b8f0-b7618bcd5fe5
 # ╠═387d2c76-1a08-441c-97fc-7b0a90a95c9a
 # ╠═864cc72a-6252-45a6-8ed4-81d960c0b080
 # ╠═ecd8d6ac-27f6-4a50-81ff-9c8f0b7fed47
