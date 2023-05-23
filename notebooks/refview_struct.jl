@@ -1008,7 +1008,7 @@ md"""
 # ╔═╡ abd76e81-2464-4119-a9bf-6046805f8e57
 begin
 """
-	get_mutual_visibitiliy(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; boresights = (rv1.face, rv2.face), fov = (90°, 90°))
+	get_mutual_visibitiliy(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; boresights = (rv1.face, rv2.face), fov = (90°, 90°), short_circuit = true)
 Similar to [`get_visibility`](@ref), returns `true` if `rv1` and `rv2` can see
 each other, assuming their antenna boresight directions to be specified by
 `boresights` and their maximum Field of View from the boresight to be specified
@@ -1017,6 +1017,11 @@ by `fovs`.
 `boresights` and `fovs` are tuples containing the values of boresight and fov for the two
 ReferenceView objects. `boresights[1]` is used as reference boresight for `rv1` while
 `boresights[2]` is used for `rv2`. Similarly for `fovs`.
+
+The `short_circuit` kwarg defaults to true and permits to return early from the
+function to save time.  When `short_circuit == true`, if the fwd visibility is
+false, the function will directly return without computing the visibility angle
+on the return direction.
 
 Each `boresight` value inside the `boresights` kwarg can be specified either as a `face` (compatible with the
 input types specified in [`change_reference_face!`](@ref)) or as a 3D pointing
@@ -1037,11 +1042,11 @@ See also: [`get_pointing`](@ref), [`get_mutual_pointing`](@ref),
 [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref),
 [`get_visibility`](@ref).
 """
-function get_mutual_visibility(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; boresights = (rv1.face, rv2.face), fovs = (90°, 90°))
+function get_mutual_visibility(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; boresights = (rv1.face, rv2.face), fovs = (90°, 90°), short_circuit = true)
 	fwd = get_visibility(rv1, rv2, eo; boresight = boresights[1], fov = fovs[1])
 
 	# We compute the forward visibility, which also checks for earth intersection
-	fwd[1] || return false, (fwd, fwd)
+	fwd[1] || short_circuit && return false, (fwd, fwd)
 
 	normalized_pdiff = -fwd[3]
 
