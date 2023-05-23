@@ -128,8 +128,8 @@ end
     @test get_visibility(sv, below)
     @test !get_visibility(sv, above)
     @test get_visibility(sv, above; boresight = :NegativeZ)
-    @test get_visibility(sv, user_30_deg; fov = 30°)
-    @test !get_visibility(sv, user_30_deg; fov = 29.99°)
+    @test get_visibility(sv, user_30_deg; fov = (30 + 1e-5)°)
+    @test !get_visibility(sv, user_30_deg; fov = (30 - 1e-5)°)
     @test get_visibility(sv, sat_60_deg; fov = (60 + 1e-5)°)
     @test !get_visibility(sv, sat_60_deg; fov = (60 - 1e-5)°)
 
