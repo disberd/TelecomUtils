@@ -119,3 +119,50 @@ end
     # Test that the wgs84 ellipsoid makes a difference in the beam diameter computation
     @test get_nadir_beam_diameter(SatView(LLA(90°, 0°, 735km), EarthModel(wgs84_ellipsoid)), 55) ≉ get_nadir_beam_diameter(SatView(LLA(0°, 0°, 735km), EarthModel(wgs84_ellipsoid)), 55)
 end
+
+@testset "Get Visibility" begin
+    above = SatView(LLA(sv.lla.lat, sv.lla.lon, sv.lla.alt + 100e3), em)
+    below = SatView(LLA(sv.lla.lat, sv.lla.lon, sv.lla.alt - 100e3), em)
+    user_30_deg = get_ecef(sv, (30°, 0°); pointing_type = :thetaphi) |> x -> UserView(x, em)
+    sat_60_deg = get_ecef(sv, (60°, 0°); h = sv.lla.alt - 200e3, pointing_type = :thetaphi) |> x -> SatView(x, em; face = -3)
+    @test get_visibility(sv, below)
+    @test !get_visibility(sv, above)
+    @test get_visibility(sv, above; boresight = :NegativeZ)
+    @test get_visibility(sv, user_30_deg; fov = 30°)
+    @test !get_visibility(sv, user_30_deg; fov = 29.99°)
+    @test get_visibility(sv, sat_60_deg; fov = (60 + 1e-5)°)
+    @test !get_visibility(sv, sat_60_deg; fov = (60 - 1e-5)°)
+
+    # Test a point with manually computed theta angle
+    R_e = em.ellipsoid.a
+    sin_ρ = R_e / (R_e + sv.lla.alt)
+    θ = asin(sin_ρ)
+    lat = acos(sin_ρ)
+    visible, theta, _ = get_visibility(sv, LLA(lat - 1e-5, 0, 0), ExtraOutput()) # We need 1e-5 to allow for tolerance with earth intersection
+    @test isapprox(theta, θ; atol=1e-5)
+
+    # Test extra output
+    visible, θ, _ = get_visibility(sv, LLA(0, 0, 0), ExtraOutput())
+    @test abs(θ) < 1e-5
+    visible, θ, _ = get_visibility(sv, LLA(0, 180°, 0), ExtraOutput())
+    @test isnan(θ) # The target is blocked by earth
+    visible, θ, _ = get_visibility(sv, LLA(0, 0, 0), ExtraOutput(); boresight=:NegativeZ)
+    @test θ ≈ π && !visible # The point is behind the satellite reference face
+    visible, θ, _ = get_visibility(sv, LLA(0, 0, 0), ExtraOutput(); boresight=:PositiveX)
+    @test θ ≈ π/2 && visible
+
+    # Test error with different earthmodel
+    @test_throws "EarthModel" get_visibility(sv, SatView(LLA(0, 0, 500km), EarthModel())) # Different EarthModels
+end
+
+@testset "Get Mutual Visibitiliy" begin
+    sv1 = SatView(LLA(0, 0, 800km), em)
+    sv2 = SatView(LLA(0, 0, 1000km), em)
+    visible, (fwd, rtn) = get_mutual_visibility(sv1, sv2, ExtraOutput())
+    @test !visible && fwd === rtn # The reference face for sv1 is still nadir, so it doesn't see sv2. If we don't set short_circuit to false, fwd and rtn are equivalent as rtn is not computed
+    visible, ((fwd_visible, _), (rtn_visible, _)) = get_mutual_visibility(sv1, sv2, ExtraOutput(); short_circuit = false)
+    @test !visible && !fwd_visible && rtn_visible # The reference face for sv1 is still nadir, so it doesn't see sv2. but sv2 sees sv1
+
+    visible = get_mutual_visibility(sv1, sv2; boresights=(:NegativeZ, :PositiveZ))
+    @test visible
+end
