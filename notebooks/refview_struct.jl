@@ -940,7 +940,10 @@ function get_visibility(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo:
 end
 	
 	# Double RefView method
-	get_visibility(rv1::ReferenceView, rv2::ReferenceView, args...; kwargs...) = get_visibility(rv1, rv2.ecef, args...; kwargs...)
+	function get_visibility(rv1::ReferenceView, rv2::ReferenceView, args...; kwargs...)
+		@assert rv1.earthmodel === rv2.earthmodel "When computing visibility between ReferenceView objects, the `EarthModel` they use internally must be the same"
+		get_visibility(rv1, rv2.ecef, args...; kwargs...)
+	end
 
 	# Single Output
 	get_visibility(rv1::ReferenceView, target; kwargs...) = get_visibility(rv1, target, ExtraOutput(); kwargs...)[1]
