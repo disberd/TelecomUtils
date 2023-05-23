@@ -1068,7 +1068,7 @@ function earth_blocking(ecef1, ecef2, a, b, ::ExtraOutput)
 	t₁,t₂ = _intersection_solutions(normalized_pdiff,ecef1,a,b)
 	# If there is an intersection, we return true and the normalized_pdiff
 	blocked = t₁ > 0 && t > t₁+1e-3
-	return blocked, normalized_pdiff, pdiff
+	return (;blocked, normalized_pdiff, pdiff)
 end
 
 # Single Output Version

@@ -499,11 +499,21 @@ Get the range [in m] between the reference view `rv` (Satellite or User) and a t
 - Providing the uv pointing `uv` and the reference altitude `h` [m] above the ellipsoid (first method)
 - directly passing in a point expressed either as `LLA`, as a `Point3D` representing its ECEF coordinates, or as another instance of `ReferenceView` (second method).
 
-The pointing is assumed to be reffered to the specified `face` of the `ReferenceView`. When the location identified by the provided pointing is not visible either because it's blocked by earth or because it's in a direction not visible from the specified `face`, `NaN` is returned.
+The pointing is assumed to be referred to the specified `face` of the
+`ReferenceView`. When the location identified by the provided pointing is not
+visible either because it's blocked by earth or because it's in a direction not
+visible from the specified `face`, `NaN` is returned.
 
-When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv`.
+See [`change_reference_face!`](@ref) for supported identification of the `face` kwarg.
 
-The kwarg `R` represents the 3D Rotation Matrix that translates a vector from ECEF coordinates to the coordinates of the desired local CRS around `rv`. By default (if `R === nothing`) this rotation matrix is computed based on the rotation matrix of the `rv` object and on the selected reference face.
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
+function also returns the coordinated of the identified point in the local CRS
+of `rv`.
+
+The kwarg `R` represents the 3D Rotation Matrix that translates a vector from
+ECEF coordinates to the coordinates of the desired local CRS around `rv`. By
+default (if `R === nothing`) this rotation matrix is computed based on the
+rotation matrix of the `rv` object and on the selected reference face.
 
 See also: [`ReferenceView`](@ref), [`get_era`](@ref), [`get_mutual_pointing`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
 """
@@ -627,19 +637,19 @@ function _get_pointing(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::
 		lla_or_ecef
 	end
 	# Check if earth is blocking
-	blocked, normalized_pdiff, pdiff = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
+	blocked, normalized_pdiff, pdiff = block_data = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
 
 	# If there is an intersection, we just return false
-	blocked && return SA_F64[NaN, NaN], SA_F64[NaN, NaN, NaN]
+	blocked && return SA_F64[NaN, NaN], SA_F64[NaN, NaN, NaN], block_data
 	_R = isnothing(R) ? inv(rv.R * face_rotation(face)) : R 
 	xyz = _R * pdiff
 	x,y,z = normalize(xyz)
 	# If the target is behind, we return NaN as first output
-	z < 0 && return SA_F64[NaN, NaN], xyz
+	z < 0 && return SA_F64[NaN, NaN], xyz, block_data
 	if pointing_type isa ThetaPhi
-		return SA_F64[acos(z), atan(y,x)], xyz
+		return SA_F64[acos(z), atan(y,x)], xyz, block_data
 	else
-		return SA_F64[x, y], xyz
+		return SA_F64[x, y], xyz, block_data
 	end
 end
 
@@ -654,11 +664,15 @@ ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
 
 When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
 function also returns the coordinated of the identified point in the local CRS
-of `rv`.
+of `rv` as second output, and a NamedTuple containing information on the earth
+blockage status as third argument.
 
 For details on how to modify the reference pointing direction using the kwargs `face` and `R` look at the documentation of [`get_range`](@ref) 
 
-See also: [`get_mutual_pointing`](@ref), [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`get_mutual_pointing`](@ref), [`ReferenceView`](@ref),
+[`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref),
+[`get_ecef`](@ref), [`get_distance_on_earth`](@ref), [`get_visibility`](@ref),
+[`get_mutual_visibility`](@ref).
 """
 function get_pointing(sv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo::ExtraOutput; pointing_type::Symbol=:uv, kwargs...)
 	_get_pointing(sv, lla_or_ecef, eo, PointingType(pointing_type); kwargs...)
@@ -679,8 +693,8 @@ end
 let
 	lla_ref = LLA(1°, 0.5°, 0km)
 	ecef_ref = ECEFfromLLA(em.ellipsoid)(lla_ref)
-	# @benchmark get_pointing($sv, $lla_ref)
-	@code_warntype get_pointing(sv, lla_ref)
+	@benchmark get_pointing($sv, $lla_ref)
+	# @code_warntype get_pointing(sv, lla_ref)
 end
   ╠═╡ =#
 
@@ -772,23 +786,49 @@ Provide the 2-D angular pointing in both directions between `rv1` and `rv2`:
 - `p₁` is the pointing of `rv2` with respect to `rv1`
 - `p₂` is the pointing of `rv1` with respect to `rv2`
 
-`pointing_type` is used to select whether the outputs should be given in UV or ThetaPhi coordinates. The result are provided as ThetaPhi [in rad] if `pointing_type ∈ (:ThetaPhi, :thetaphi, :θφ)`
+`pointing_type` is used to select whether the outputs are returned in UV or
+ThetaPhi [rad] coordinates. The following symbols are supported for this kwarg:
+- `:thetaphi`, `:ThetaPhi` and `:θφ` can be used to represent pointing in ThetaPhi [rad]
+- `:UV` and `:uv` can be used to represent pointing in UV
 
-When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the function also returns the coordinated of the identified point in the local CRS of `rv1` (or `rv2`). In this case:
-- `p₁` is a tuple containing the pointing as well as the local CRS coordinates of `rv2` with respect to `rv1`
-- `p₂` is a tuple containing the pointing as well as the local CRS coordinates of `rv1` with respect to `rv2`
+When called with an instance of `TelecomUtils.ExtraOutput` as last argument, the
+function also returns the coordinated of the identified point in the local CRS
+of `rv1` (or `rv2`). In this case:
+- `p₁` is a tuple containing the pointing as first argument, the local CRS coordinates of `rv2` with respect to `rv1` as second argument and a NamedTuple with earth blockage data as third argument.
+- `p₂` is a tuple containing the pointing as first argument, the local CRS coordinates of `rv1` with respect to `rv2` as second argument and a NamedTuple with earth blockage data as third argument.
 
-`faces` and `Rs` are tuples containing the values of `face` and `R` for the two ReferenceView objects. `faces[1]` is used as reference face for `rv1` while `faces[2]` is used for `rv2`. Similarly for `Rs`.
+`faces` and `Rs` are tuples containing the values of `face` and `R` for the two
+ReferenceView objects. `faces[1]` is used as reference face for `rv1` while
+`faces[2]` is used for `rv2`. Similarly for `Rs`.
 
-For details on how to modify the reference pointing direction using `face` and `R` look at the documentation of [`get_range`](@ref) 
+For details on how to modify the reference pointing direction using `face` and
+`R` look at the documentation of [`get_range`](@ref) 
 
-See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref), [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref).
+See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref),
+[`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref),
+[`get_visibility`](@ref), [`get_mutual_visibility`](@ref).
 """
 function get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; pointing_type = :uv, faces = (rv1.face, rv2.face), Rs = (nothing, nothing))
 	# Pointing of rv2 as seen from rv1
-	p₁ = get_pointing(rv1, rv2, eo; pointing_type, face = faces[1], R = Rs[1])
-	p₂ = get_pointing(rv2, rv1, eo; pointing_type, face = faces[2], R = Rs[2])
-	return p₁, p₂
+	p₁, xyz₁, block_data = data1 = get_pointing(rv1, rv2, eo; pointing_type, face = faces[1], R = Rs[1])
+
+	block_data.blocked && return data1, (SA_F64[NaN, NaN], SA_F64[NaN, NaN, NaN], block_data)
+
+	block_data = (;block_data..., pdiff = -block_data.pdiff, normalized_pdiff = -block_data.normalized_pdiff)
+
+	R = Rs[2]
+	_R = isnothing(R) ? inv(rv2.R * face_rotation(faces[2])) : R 
+	xyz = _R * block_data.pdiff
+	x,y,z = normalize(xyz)
+	# If the target is behind, we return NaN as first output
+	z < 0 && return data1, (SA_F64[NaN, NaN], xyz, block_data)
+	data2 = if pointing_type isa ThetaPhi
+		SA_F64[acos(z), atan(y,x)], xyz, block_data
+	else
+		SA_F64[x, y], xyz, block_data
+	end
+	
+	return data1, data2
 end
 get_mutual_pointing(rv1, rv2; kwargs...) = first.(get_mutual_pointing(rv1, rv2, ExtraOutput(); kwargs...))
 end
@@ -799,6 +839,24 @@ let
 	sv1 = sv
 	sv2 = SatView(LLA(0°,1°, 1000km), em)
 	@benchmark get_mutual_pointing($sv1, $sv2; faces = (-3,3))
+end
+  ╠═╡ =#
+
+# ╔═╡ 868bb972-aa0b-484d-b906-1628412b1646
+#=╠═╡
+let
+	sv1 = sv
+	sv2 = SatView(LLA(0°,1°, 1000km), em)
+	@benchmark get_mutual_pointing($sv1, $sv2, ExtraOutput();pointing_type = :thetaphi, faces = (-3,3))
+end
+  ╠═╡ =#
+
+# ╔═╡ 83098fe4-2089-44be-8db9-6e2db74d886d
+#=╠═╡
+let
+	sv1 = sv
+	sv2 = SatView(LLA(0°,1°, 1000km), em)
+	get_mutual_pointing(sv1, sv2, ExtraOutput();pointing_type = :thetaphi, faces = (-3,3))
 end
   ╠═╡ =#
 
@@ -822,7 +880,7 @@ begin
 	t₁,t₂ = _intersection_solutions(normalized_pdiff,ecef1,a,b)
 	# If there is an intersection, we return true and the normalized_pdiff
 	blocked = t₁ > 0 && t > t₁+1e-3
-	return blocked, normalized_pdiff, pdiff
+	return (;blocked, normalized_pdiff, pdiff)
 end
 
 # Single Output Version
@@ -838,7 +896,7 @@ function get_visibility(rv::ReferenceView, lla_or_ecef::Union{LLA, Point3D}, eo:
 	else
 		lla_or_ecef
 	end	
-	blocked, normalized_pdiff, _ = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
+	blocked, normalized_pdiff, _ = block_data = earth_blocking(rv.ecef,ecef, rv.ellipsoid.a,rv.ellipsoid.b, eo)
 
 	# # If there is an intersection, we just return false
 	blocked && return false, NaN, normalized_pdiff
@@ -861,7 +919,18 @@ let
 	rv1 = SatView(LLA(0°, 10°, 800km), em)
 	rv2 = SatView(LLA(35°, 10°, 600km), em; face = -3)
 	v = get_visibility(rv1, rv2; fov = 60°)
-	p = get_pointing(rv1, rv2; pointing_type = :uv)
+	p = get_pointing(rv1, rv2, ExtraOutput(); pointing_type = :uv)
+	v,p
+end
+  ╠═╡ =#
+
+# ╔═╡ b75df549-ed46-4def-9fe0-e63ac496b3f4
+#=╠═╡
+let
+	rv1 = SatView(LLA(0°, 10°, 800km), em)
+	rv2 = LLA(0°, 190°, 600km)
+	v = get_visibility(rv1, rv2; fov = 60°)
+	p = get_pointing(rv1, rv2, ExtraOutput(); pointing_type = :uv)
 	v,p
 end
   ╠═╡ =#
@@ -1949,10 +2018,13 @@ version = "17.4.0+0"
 # ╠═a93e2354-34d1-4d1d-ac3c-f4c99099820a
 # ╠═46eb3a4d-c80b-41a0-9333-aaf6411a010c
 # ╠═abb3a7ee-ff60-421c-8a85-23c3ef1ce6af
+# ╠═b75df549-ed46-4def-9fe0-e63ac496b3f4
 # ╠═314c4c2a-6f3b-4a7d-aa83-9073eb67897b
 # ╟─a61e66cf-b430-4d84-a753-faf42f4b6337
 # ╠═98f3f83d-fcde-48ba-8855-c30643776d81
 # ╠═cda9503a-5262-4318-9f5d-aea7910ab42e
+# ╠═868bb972-aa0b-484d-b906-1628412b1646
+# ╠═83098fe4-2089-44be-8db9-6e2db74d886d
 # ╟─1de548c0-3830-4161-b80c-be72dd894e85
 # ╠═664be7e6-28f5-4ab3-b8f0-b7618bcd5fe5
 # ╠═387d2c76-1a08-441c-97fc-7b0a90a95c9a
