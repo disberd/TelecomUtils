@@ -1050,6 +1050,31 @@ end
 @benchmark _intersection_solutions(SA_F64[100,0,0], SA_F64[-1,0,0], 10,10)
   ╠═╡ =#
 
+# ╔═╡ 0497740b-a441-41d9-8671-530d045a1712
+md"""
+### Earth Blocking
+"""
+
+# ╔═╡ c46c45e9-ef41-4015-93bb-6b71f5a7ffeb
+begin
+function earth_blocking(ecef1, ecef2, a, b, ::ExtraOutput)
+	@inline
+	# Check if the given ecef coordinate is visible from the satellite position or is obstructed from earth
+	pdiff = (ecef2 - ecef1)
+		
+	# Find the magnitude of the difference to compare with the intersection solutions
+	t = norm(pdiff)
+	normalized_pdiff = pdiff ./ t
+	t₁,t₂ = _intersection_solutions(normalized_pdiff,ecef1,a,b)
+	# If there is an intersection, we return true and the normalized_pdiff
+	blocked = t₁ > 0 && t > t₁+1e-3
+	return (;blocked, normalized_pdiff, pdiff)
+end
+
+# Single Output Version
+earth_blocking(ecef1, ecef2, a, b) = earth_blocking(ecef1, ecef2, a, b, ExtraOutput())[1]
+end
+
 # ╔═╡ 7ab00d88-9f0c-4ad9-a735-6ef845055823
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -1863,12 +1888,14 @@ version = "17.4.0+0"
 # ╠═1df46c22-c2ab-4384-9436-4b45e5603ed2
 # ╟─97e3be69-b480-482b-a1aa-5bf2ede10cbe
 # ╟─95704330-4d7b-44fd-b8c0-d1570812f619
-# ╠═2e788b78-e5e0-4f60-aa8c-ad4f203c982e
+# ╟─2e788b78-e5e0-4f60-aa8c-ad4f203c982e
 # ╠═4cea8d15-9bb9-455c-b8bf-10b8d9a2d4af
 # ╠═ea3e2a47-de2f-4383-8f01-e8fbebbdd605
 # ╠═d788faa8-df04-4a14-bef0-d76f85a9175e
 # ╠═2af585a1-05d0-4b5a-9ee6-15eabb40a27c
 # ╠═5cea5fed-1cee-41f3-bcdf-2d81e96c72d4
+# ╟─0497740b-a441-41d9-8671-530d045a1712
+# ╠═c46c45e9-ef41-4015-93bb-6b71f5a7ffeb
 # ╠═7ab00d88-9f0c-4ad9-a735-6ef845055823
 # ╠═f634d5d0-bb61-4bd6-9b1c-df75399de739
 # ╠═8b3f7041-ce2f-4d64-a135-9403eacd6385
