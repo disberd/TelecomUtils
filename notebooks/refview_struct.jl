@@ -905,7 +905,7 @@ end
 # ╔═╡ 387d2c76-1a08-441c-97fc-7b0a90a95c9a
 begin
 """
-	get_visibitiliy(rv::ReferenceView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; boresight = rv.face, fov = 90°)
+	get_visibility(rv::ReferenceView, target::Union{LLA, Point3D, ReferenceView}[, ::ExtraOutput]; boresight = rv.face, fov = 90°)
 Returns `true` if `target` is visible from `rv` assuming an antenna boresight
 direction specified by `boresight` and a maximum Field of View from the
 boresight specified by `fov`.
@@ -1013,7 +1013,7 @@ md"""
 # ╔═╡ abd76e81-2464-4119-a9bf-6046805f8e57
 begin
 """
-	get_mutual_visibitiliy(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; boresights = (rv1.face, rv2.face), fov = (90°, 90°), short_circuit = true)
+	get_mutual_visibility(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; boresights = (rv1.face, rv2.face), fov = (90°, 90°), short_circuit = true)
 Similar to [`get_visibility`](@ref), returns `true` if `rv1` and `rv2` can see
 each other, assuming their antenna boresight directions to be specified by
 `boresights` and their maximum Field of View from the boresight to be specified
