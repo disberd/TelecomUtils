@@ -789,7 +789,7 @@ md"""
 # ╔═╡ 98f3f83d-fcde-48ba-8855-c30643776d81
 begin
 """
-	p₁, p₂ = get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; pointing_type::Symbol=:uv, faces = (rv1.face, rv2.face), Rs=(nothing, nothing))
+	p₁, p₂ = get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView[, ::ExtraOutput]; pointing_type::Symbol=:uv, faces = (rv1.face, rv2.face), Rs=(nothing, nothing), short_circuit = true)
 
 Provide the 2-D angular pointing in both directions between `rv1` and `rv2`:
 - `p₁` is the pointing of `rv2` with respect to `rv1`
@@ -810,6 +810,11 @@ of `rv1` (or `rv2`). In this case:
 ReferenceView objects. `faces[1]` is used as reference face for `rv1` while
 `faces[2]` is used for `rv2`. Similarly for `Rs`.
 
+The `short_circuit` kwarg defaults to true and permits to return early from the
+function to save time.  When `short_circuit == true`, if the fwd pointing is
+false because of earth blockage, the function will directly return without
+computing the pointing on the return direction.
+
 For details on how to modify the reference pointing direction using `face` and
 `R` look at the documentation of [`get_range`](@ref) 
 
@@ -817,11 +822,11 @@ See also: [`ReferenceView`](@ref), [`get_range`](@ref), [`get_pointing`](@ref),
 [`get_lla`](@ref), [`get_ecef`](@ref), [`get_distance_on_earth`](@ref),
 [`get_visibility`](@ref), [`get_mutual_visibility`](@ref).
 """
-function get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; pointing_type = :uv, faces = (rv1.face, rv2.face), Rs = (nothing, nothing))
+function get_mutual_pointing(rv1::ReferenceView, rv2::ReferenceView, eo::ExtraOutput; pointing_type = :uv, faces = (rv1.face, rv2.face), Rs = (nothing, nothing), short_circuit = true)
 	# Pointing of rv2 as seen from rv1
 	p₁, xyz₁, block_data = data1 = get_pointing(rv1, rv2, eo; pointing_type, face = faces[1], R = Rs[1])
 
-	block_data.blocked && return data1, (SA_F64[NaN, NaN], SA_F64[NaN, NaN, NaN], block_data)
+	block_data.blocked && short_circuit && return data1, (SA_F64[NaN, NaN], SA_F64[NaN, NaN, NaN], block_data)
 
 	block_data = (;block_data..., pdiff = -block_data.pdiff, normalized_pdiff = -block_data.normalized_pdiff)
 
