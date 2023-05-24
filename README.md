@@ -1,4 +1,6 @@
 # TelecomUtils
+[![](https://img.shields.io/badge/docs-stable-blue.svg)](https://USER_NAME.github.io/PACKAGE_NAME.jl/stable)
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://USER_NAME.github.io/PACKAGE_NAME.jl/dev)
 
 This package provides some basic utilities for helping with simulations of Telecommunication Satellites. The main contribution comes in the form of the `ReferenceView` structure defined in the [`refview_struct.jl`](notebooks/refview_struct.jl) notebook.
 
